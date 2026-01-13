@@ -77,8 +77,8 @@
 <script>
     let myWords = JSON.parse(localStorage.getItem('myWords')) || [{ru:"привет", en:"hello"}, 
                                                                   {ru:"книга" , en:"Book"},
-                                                                  
-                                                                 ];
+                                                                
+                                                                ];
     let currentWord = null; let smartQueue = []; let isFlipped = false;
     function speak(t) { window.speechSynthesis.cancel(); let m = new SpeechSynthesisUtterance(t); m.lang = 'en-US'; window.speechSynthesis.speak(m); }
     function updateCounters() { document.getElementById('testBadge').innerText = `В словаре: ${myWords.length} слов`; document.getElementById('settingBadge').innerText = `Всего слов: ${myWords.length}`; document.getElementById('testInputCount').value = myWords.length; }
