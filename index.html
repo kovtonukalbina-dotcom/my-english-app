@@ -6,36 +6,31 @@
     <title>English Pro Sync</title>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        // ТВОЙ НОВЫЙ КОНФИГ (ПРОЕКТ llla-f3cd0)
         const firebaseConfig = {
             apiKey: "AIzaSyB7vbQ1BQya7SWIsGByt6pLtnkX-0WG1I8",
             authDomain: "llla-f3cd0.firebaseapp.com",
             projectId: "llla-f3cd0",
             storageBucket: "llla-f3cd0.firebasestorage.app",
             messagingSenderId: "976940645729",
-            appId: "1:976940645729:web:0a6a820a6a76156cf11920",
-            measurementId: "G-4FWZXCKYX6"
+            appId: "1:976940645729:web:0a6a820a6a76156cf11920"
         };
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
+        const provider = new GoogleAuthProvider();
 
         let currentUser = null;
         let myWords = [];
 
-        // Авторизация
-        window.handleAuth = async (type) => {
-            const email = document.getElementById('authEmail').value;
-            const pass = document.getElementById('authPass').value;
-            if(!email || !pass) return alert("Введите почту и пароль!");
+        // ВХОД ЧЕРЕЗ GOOGLE
+        window.loginWithGoogle = async () => {
             try {
-                if (type === 'reg') await createUserWithEmailAndPassword(auth, email, pass);
-                else await signInWithEmailAndPassword(auth, email, pass);
-            } catch (e) { alert("Ошибка: " + e.message); }
+                await signInWithPopup(auth, provider);
+            } catch (e) { alert("Ошибка входа: " + e.message); }
         };
 
         window.logOut = () => signOut(auth);
@@ -63,88 +58,66 @@
             initCard();
         }
 
-        async function saveData() {
-            await setDoc(doc(db, "users", currentUser.uid), { words: myWords });
-        }
-
-        // Карточки
-        let currentCard = null;
-        window.initCard = () => {
-            const cardElement = document.getElementById('cardText');
-            if(!myWords.length) { cardElement.innerText = "Добавьте слова в меню ➕"; return; }
-            currentCard = myWords[Math.floor(Math.random() * myWords.length)];
-            cardElement.innerText = currentCard.ru;
-        };
-
-        window.flipCard = () => {
-            const t = document.getElementById('cardText');
-            t.innerText = (t.innerText === currentCard.ru) ? currentCard.en : currentCard.ru;
-        };
-
-        // Добавление слов
         window.addWord = async () => {
             const en = document.getElementById('enIn').value.trim();
             const ru = document.getElementById('ruIn').value.trim();
             if(en && ru) {
                 myWords.push({en, ru});
-                await saveData();
+                await setDoc(doc(db, "users", currentUser.uid), { words: myWords });
                 document.getElementById('enIn').value = "";
                 document.getElementById('ruIn').value = "";
-                alert("Слово сохранено в облако!");
+                alert("Сохранено!");
             }
+        };
+
+        window.initCard = () => {
+            const t = document.getElementById('cardText');
+            if(!myWords.length) { t.innerText = "Добавь слова!"; return; }
+            const word = myWords[Math.floor(Math.random()*myWords.length)];
+            t.innerText = word.ru;
+            t.onclick = () => t.innerText = (t.innerText === word.ru ? word.en : word.ru);
         };
 
         window.showTab = (id) => {
             document.querySelectorAll('.tab').forEach(t => t.style.display = 'none');
             document.getElementById(id).style.display = 'block';
-            if(id === 'learn') initCard();
         };
-
     </script>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #0f3460; color: white; text-align: center; margin: 0; padding: 20px; }
-        .box { background: #16213e; padding: 25px; border-radius: 20px; max-width: 400px; margin: 20px auto; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 10px; border: none; box-sizing: border-box; font-size: 16px; }
-        button { width: 100%; padding: 12px; margin: 5px 0; border-radius: 10px; border: none; background: #e94560; color: white; font-weight: bold; cursor: pointer; transition: 0.3s; }
-        button:hover { background: #ff5e78; }
-        .nav-btn { width: auto; background: #533483; padding: 10px 15px; font-size: 14px; }
-        .card { background: #1a1a2e; height: 180px; display: flex; align-items: center; justify-content: center; font-size: 28px; border-radius: 15px; cursor: pointer; margin: 20px 0; border: 2px dashed #e94560; }
-        .tab { display: none; }
-        .active-tab { display: block; }
+        body { font-family: sans-serif; background: #0f3460; color: white; text-align: center; padding: 20px; }
+        .box { background: #16213e; padding: 25px; border-radius: 20px; max-width: 400px; margin: auto; }
+        button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 10px; border: none; background: #e94560; color: white; font-weight: bold; cursor: pointer; }
+        .google-btn { background: white; color: #444; display: flex; align-items: center; justify-content: center; gap: 10px; }
+        input { width: 100%; padding: 10px; margin: 5px 0; border-radius: 8px; border: none; box-sizing: border-box; }
+        .card { background: #1a1a2e; height: 150px; display: flex; align-items: center; justify-content: center; font-size: 24px; border-radius: 15px; margin: 20px 0; border: 2px dashed #e94560; cursor: pointer; }
     </style>
 </head>
 <body>
-
     <div id="authSection" class="box">
-        <h2>English Pro 📚</h2>
-        <p style="color: #aaa; font-size: 14px;">Войдите, чтобы ваши слова сохранялись</p>
-        <input type="email" id="authEmail" placeholder="Ваша почта">
-        <input type="password" id="authPass" placeholder="Пароль">
-        <button onclick="handleAuth('login')">Войти</button>
-        <button onclick="handleAuth('reg')" style="background: #533483;">Создать аккаунт</button>
+        <h2>English Pro Sync</h2>
+        <button class="google-btn" onclick="loginWithGoogle()">
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="20">
+            Войти через Google
+        </button>
     </div>
 
     <div id="mainApp" style="display:none">
         <div class="box">
-            <div style="display: flex; justify-content: space-around; margin-bottom: 20px;">
-                <button class="nav-btn" onclick="showTab('learn')">Учить</button>
-                <button class="nav-btn" onclick="showTab('add')">➕ Слово</button>
-                <button class="nav-btn" onclick="logOut()" style="background: #222;">Выход</button>
+            <button onclick="showTab('learn')">Учить</button>
+            <button onclick="showTab('add')">➕ Добавить</button>
+            <button onclick="logOut()" style="background:#333">Выход</button>
+            
+            <div id="learn" class="tab">
+                <div class="card" id="cardText">...</div>
+                <button onclick="initCard()">Дальше</button>
             </div>
-
-            <div id="learn" class="tab active-tab">
-                <div class="card" id="cardText" onclick="flipCard()">Нажми, чтобы начать</div>
-                <button onclick="initCard()">Следующее слово →</button>
-            </div>
-
-            <div id="add" class="tab">
-                <h3>Добавить слово</h3>
-                <input id="enIn" placeholder="English (например: Apple)">
-                <input id="ruIn" placeholder="Русский (например: Яблоко)">
-                <button onclick="addWord()">Сохранить в облако</button>
+            
+            <div id="add" class="tab" style="display:none">
+                <input id="enIn" placeholder="English">
+                <input id="ruIn" placeholder="Русский">
+                <button onclick="addWord()">Сохранить</button>
             </div>
         </div>
     </div>
-
 </body>
 </html>
