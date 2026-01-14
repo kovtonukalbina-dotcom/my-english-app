@@ -37,10 +37,10 @@
             if (user) {
                 currentUser = user;
                 document.getElementById('authSection').style.display = 'none';
-                document.getElementById('mainApp').style.display = 'block';
+                document.getElementById('mainApp').style.display = 'flex';
                 await loadData();
             } else {
-                document.getElementById('authSection').style.display = 'block';
+                document.getElementById('authSection').style.display = 'flex';
                 document.getElementById('mainApp').style.display = 'none';
             }
         });
@@ -48,29 +48,19 @@
         async function loadData() {
             const docRef = doc(db, "users", currentUser.uid);
             const docSnap = await getDoc(docRef);
-            myWords = docSnap.exists() ? (docSnap.data().words || []) : [{ru: "привет", en: "hello"}];
+            myWords = docSnap.exists() ? (docSnap.data().words || []) : [{ru: "яблоко", en: "apple"}];
             changeTab('cardTab');
         }
 
-        async function saveData() {
-            await setDoc(doc(db, "users", currentUser.uid), { words: myWords });
-        }
-
-        window.speak = (t) => { 
-            window.speechSynthesis.cancel(); 
-            let m = new SpeechSynthesisUtterance(t); 
-            m.lang = 'en-US'; 
-            window.speechSynthesis.speak(m); 
-        };
-
         window.changeTab = (id) => {
-            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-            document.getElementById(id).classList.add('active');
+            document.querySelectorAll('.section').forEach(s => s.style.display = 'none');
+            document.getElementById(id).style.display = 'block';
             if(id === 'cardTab') initCard();
             if(id === 'writeTab') initWrite();
             if(id === 'testTab') startTest();
         };
 
+        // КАРТОЧКИ
         let currentWord = null;
         let isFlipped = false;
         window.initCard = () => {
@@ -78,86 +68,115 @@
             isFlipped = false;
             document.getElementById('cardDisplay').innerText = currentWord.ru;
         };
-
         window.flipCard = () => {
             isFlipped = !isFlipped;
             document.getElementById('cardDisplay').innerText = isFlipped ? currentWord.en : currentWord.ru;
-            if(isFlipped) speak(currentWord.en);
+            if(isFlipped) {
+                let m = new SpeechSynthesisUtterance(currentWord.en);
+                m.lang = 'en-US';
+                window.speechSynthesis.speak(m);
+            }
         };
 
+        // ДОБАВЛЕНИЕ
         window.addNewWord = async () => {
             const en = document.getElementById('newEn').value.trim();
             const ru = document.getElementById('newRu').value.trim();
             if(en && ru) {
                 myWords.push({en, ru});
-                await saveData();
+                await setDoc(doc(db, "users", currentUser.uid), { words: myWords });
                 document.getElementById('newEn').value = "";
                 document.getElementById('newRu').value = "";
-                alert("Добавлено!");
+                alert("Сохранено!");
             }
         };
 
-        // Логика теста и написания (упрощенная для стабильности)
+        // НАПИСАНИЕ
         window.initWrite = () => {
             currentWord = myWords[Math.floor(Math.random()*myWords.length)];
             document.getElementById('writeQuest').innerText = currentWord.ru;
             document.getElementById('writeInput').value = "";
         };
-
         window.checkWrite = () => {
-            let v = document.getElementById('writeInput').value.trim().toLowerCase();
-            if(v === currentWord.en.toLowerCase()) { speak(currentWord.en); alert("Верно!"); initWrite(); }
-            else alert("Ошибка! Правильно: " + currentWord.en);
+            if(document.getElementById('writeInput').value.toLowerCase().trim() === currentWord.en.toLowerCase()) {
+                alert("Правильно!"); initWrite();
+            } else alert("Ошибка!");
         };
+
+        // ТЕСТ
+        window.startTest = () => {
+            let q = myWords[Math.floor(Math.random()*myWords.length)];
+            document.getElementById('testQuest').innerText = `Как переводится "${q.ru}"?`;
+            let opts = [q.en];
+            while(opts.length < Math.min(4, myWords.length)) {
+                let r = myWords[Math.floor(Math.random()*myWords.length)].en;
+                if(!opts.includes(r)) opts.push(r);
+            }
+            opts.sort(() => 0.5 - Math.random());
+            document.getElementById('testOptions').innerHTML = opts.map(o => 
+                `<button class="btn-main" style="margin:5px 0" onclick="checkTestAnswer('${o}','${q.en}')">${o}</button>`
+            ).join('');
+        };
+        window.checkTestAnswer = (val, ans) => {
+            if(val === ans) { alert("Верно!"); startTest(); }
+            else alert("Неверно!");
+        };
+
     </script>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #333; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
-        .app-header { color: #fff; font-size: 2rem; margin: 20px 0; font-weight: bold; }
-        .menu { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-bottom: 20px; width: 100%; max-width: 500px; }
-        .menu button { padding: 10px 15px; border: none; background: #007bff; color: #fff; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px; }
-        .container { background: #fff; padding: 30px; border-radius: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); width: 100%; max-width: 500px; text-align: center; }
-        .section { display: none; } .active { display: block; }
-        .card-box { padding: 60px 20px; border: 2px dashed #007bff; border-radius: 20px; font-size: 28px; font-weight: bold; cursor: pointer; margin-bottom: 20px; color: #2c3e50; }
-        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; }
-        .btn-main { background: #28a745; color: white; border: none; padding: 15px; border-radius: 10px; width: 100%; cursor: pointer; font-size: 16px; font-weight: bold; }
-        .google-btn { background: white; padding: 15px 25px; border-radius: 12px; border: none; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 10px; margin-top: 50px; }
+        body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; margin: 0; display: flex; justify-content: center; min-height: 100vh; color: white; }
+        #authSection, #mainApp { display: flex; flex-direction: column; align-items: center; width: 100%; padding: 20px; box-sizing: border-box; }
+        .app-header { font-size: 2.5rem; font-weight: bold; margin: 20px 0; }
+        .menu { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-bottom: 25px; }
+        .menu button { padding: 12px 18px; border: none; border-radius: 12px; background: #007bff; color: white; font-weight: bold; cursor: pointer; }
+        .container { background: white; color: #333; padding: 40px; border-radius: 30px; width: 100%; max-width: 600px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
+        .card-box { padding: 60px 20px; border: 2px dashed #007bff; border-radius: 20px; font-size: 32px; font-weight: bold; cursor: pointer; margin-bottom: 20px; }
+        input { width: 100%; padding: 15px; margin: 10px 0; border: 1px solid #ddd; border-radius: 12px; box-sizing: border-box; font-size: 16px; }
+        .btn-main { background: #28a745; color: white; border: none; padding: 15px; border-radius: 12px; width: 100%; cursor: pointer; font-size: 18px; font-weight: bold; }
+        .google-btn { background: white; color: #333; padding: 15px 30px; border-radius: 15px; border: none; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 10px; margin-top: 100px; }
     </style>
 </head>
 <body>
 
     <div id="authSection">
-        <h1 style="color: white;">English App</h1>
+        <h1 class="app-header">🚀 My English App</h1>
         <button class="google-btn" onclick="loginWithGoogle()">
             <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="20"> Войти через Google
         </button>
     </div>
 
-    <div id="mainApp" style="display:none; width: 100%; max-width: 500px;">
+    <div id="mainApp" style="display:none;">
         <div class="app-header">🚀 My English App</div>
         <div class="menu">
             <button onclick="changeTab('cardTab')">📇 Карточки</button>
+            <button onclick="changeTab('testTab')">📝 Тест</button>
             <button onclick="changeTab('writeTab')">✍️ Написание</button>
             <button onclick="changeTab('addTab')">➕ Добавить</button>
-            <button onclick="logOut()" style="background:#555">🚪 Выход</button>
+            <button onclick="logOut()" style="background:#444">🚪 Выход</button>
         </div>
 
         <div class="container">
             <div id="cardTab" class="section">
-                <div class="card-box" id="cardDisplay" onclick="flipCard()">Нажми для начала</div>
-                <button class="btn-main" style="background:#6c757d" onclick="initCard()">Следующее слово →</button>
+                <div class="card-box" id="cardDisplay" onclick="flipCard()">Нажми...</div>
+                <button class="btn-main" style="background:#6c757d" onclick="initCard()">Следующее →</button>
             </div>
 
-            <div id="writeTab" class="section">
+            <div id="testTab" class="section" style="display:none">
+                <h2 id="testQuest">...</h2>
+                <div id="testOptions"></div>
+            </div>
+
+            <div id="writeTab" class="section" style="display:none">
                 <h2 id="writeQuest">...</h2>
-                <input type="text" id="writeInput" placeholder="Перевод...">
+                <input type="text" id="writeInput" placeholder="Введите перевод...">
                 <button class="btn-main" onclick="checkWrite()">Проверить</button>
             </div>
 
-            <div id="addTab" class="section">
-                <h3>Добавить слово</h3>
+            <div id="addTab" class="section" style="display:none">
+                <h3>Добавить новое слово</h3>
                 <input type="text" id="newEn" placeholder="English">
                 <input type="text" id="newRu" placeholder="Русский">
-                <button class="btn-main" onclick="addNewWord()">Сохранить</button>
+                <button class="btn-main" onclick="addNewWord()">Сохранить в облако</button>
             </div>
         </div>
     </div>
