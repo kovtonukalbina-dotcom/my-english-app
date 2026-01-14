@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>English Pro App</title>
+    <title>English Pro Max</title>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
@@ -24,81 +24,55 @@
 
         let state = {
             words: [
-                {en: "Apple", ru: "Яблоко", cat: "Base"}, {en: "Book", ru: "Книга", cat: "Base"},
+                {en: "Apple", ru: "Яблоко", cat: "Base"}, {en: "House", ru: "Дом", cat: "Base"},
                 {en: "Cat", ru: "Кот", cat: "Base"}, {en: "Dog", ru: "Собака", cat: "Base"},
-                {en: "Home", ru: "Дом", cat: "Base"}, {en: "Work", ru: "Работа", cat: "Base"},
-                {en: "Water", ru: "Вода", cat: "Base"}, {en: "Friend", ru: "Друг", cat: "Base"},
-                {en: "School", ru: "Школа", cat: "Base"}, {en: "Time", ru: "Время", cat: "Base"}
+                {en: "Sun", ru: "Солнце", cat: "Base"}, {en: "Water", ru: "Вода", cat: "Base"}
             ],
             streak: 0,
             lastDate: ""
         };
 
-        // Вход
-        window.login = async () => {
-            const provider = new GoogleAuthProvider();
-            provider.setCustomParameters({ prompt: 'select_account' });
-            try {
-                await signInWithPopup(auth, provider);
-            } catch (err) {
-                alert("Ошибка входа: " + err.message);
-            }
+        window.login = () => {
+            const p = new GoogleAuthProvider();
+            p.setCustomParameters({ prompt: 'select_account' });
+            signInWithPopup(auth, p);
         };
 
-        // Выход
         window.logout = () => signOut(auth).then(() => location.reload());
 
         onAuthStateChanged(auth, async (user) => {
-            const authSect = document.getElementById('authSection');
-            const mainSect = document.getElementById('mainApp');
-            
             if (user) {
-                authSect.style.display = 'none';
-                mainSect.style.display = 'block';
-                await loadUserData(user.uid);
+                document.getElementById('authSection').style.display = 'none';
+                document.getElementById('mainApp').style.display = 'block';
+                const snap = await getDoc(doc(db, "users", user.uid));
+                if (snap.exists()) state = { ...state, ...snap.data() };
                 renderFolders();
                 showTab('cardsTab');
             } else {
-                authSect.style.display = 'flex';
-                mainSect.style.display = 'none';
+                document.getElementById('authSection').style.display = 'flex';
+                document.getElementById('mainApp').style.display = 'none';
             }
         });
 
-        async function loadUserData(uid) {
-            try {
-                const snap = await getDoc(doc(db, "users", uid));
-                if (snap.exists()) {
-                    state = { ...state, ...snap.data() };
-                } else {
-                    await setDoc(doc(db, "users", uid), state);
-                }
-                updateStreakUI();
-            } catch (e) {
-                console.error("Cloud error, using local data");
-            }
-        }
-
-        function updateStreakUI() {
-            const today = new Date().toDateString();
-            if (state.lastDate && state.lastDate !== today) {
-                const diff = (new Date(today) - new Date(state.lastDate)) / 86400000;
-                if (diff > 1) state.streak = 0;
-            }
-            document.getElementById('streakLabel').innerText = "🔥 Серия: " + state.streak;
-        }
-
-        window.showTab = (tabId) => {
+        window.showTab = (id) => {
             document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
-            document.getElementById(tabId).style.display = 'block';
-            if (tabId === 'cardsTab') drawCard();
+            document.getElementById(id).style.display = 'block';
+            if (id === 'cardsTab') drawCard();
+            if (id === 'testsTab') resetTestUI();
         };
 
         function renderFolders() {
             const cats = [...new Set(state.words.map(w => w.cat))];
-            const options = cats.map(c => `<option value="${c}">${c}</option>`).join('');
-            document.getElementById('cardCat').innerHTML = options;
-            document.getElementById('testCat').innerHTML = options;
+            const html = cats.map(c => `<option value="${c}">${c}</option>`).join('');
+            document.getElementById('cardCat').innerHTML = html;
+            document.getElementById('testCat').innerHTML = html;
         }
+
+        window.speak = (t) => {
+            const m = new SpeechSynthesisUtterance(t);
+            m.lang = 'en-US';
+            window.speechSynthesis.speak(m);
+        };
 
         // --- КАРТОЧКИ ---
         window.drawCard = () => {
@@ -106,90 +80,98 @@
             const pool = state.words.filter(w => w.cat === cat);
             const word = pool[Math.floor(Math.random() * pool.length)];
             const box = document.getElementById('cardBox');
-            if(!word) return box.innerHTML = "Нет слов";
-            
-            box.innerHTML = `
-                <div class="card-inner" onclick="this.classList.toggle('flipped'); speak('${word.en}')">
-                    <div class="card-front">${word.ru}</div>
-                    <div class="card-back">${word.en}</div>
-                </div>`;
-        };
-
-        window.speak = (txt) => {
-            const m = new SpeechSynthesisUtterance(txt);
-            m.lang = 'en-US';
-            window.speechSynthesis.speak(m);
+            box.innerHTML = `<div class="card-inner" onclick="this.classList.toggle('flipped'); speak('${word.en}')">
+                <div class="card-front">${word.ru}</div>
+                <div class="card-back">${word.en}</div>
+            </div>`;
         };
 
         // --- ТЕСТЫ ---
         let currentTest = [];
+        let curIdx = 0;
+
+        function resetTestUI() {
+            document.getElementById('testConfig').style.display = 'block';
+            document.getElementById('testActive').style.display = 'none';
+            document.getElementById('testResult').style.display = 'none';
+        }
+
         window.startTest = () => {
             const cat = document.getElementById('testCat').value;
             const count = parseInt(document.getElementById('testCount').value) || 5;
             const types = Array.from(document.querySelectorAll('.t-type:checked')).map(i => i.value);
-            
             if (!types.length) return alert("Выбери типы заданий!");
             
             const pool = state.words.filter(w => w.cat === cat);
             currentTest = [...pool].sort(() => 0.5 - Math.random()).slice(0, count).map(w => {
                 const type = types[Math.floor(Math.random() * types.length)];
-                let q = { word: w, type, userAns: "" };
-                if (type === 'choice') {
-                    q.opts = [w.en, ...pool.filter(x => x.en !== w.en).sort(() => 0.5 - Math.random()).slice(0, 2).map(x => x.en)].sort(() => 0.5 - Math.random());
-                } else if (type === 'tf') {
-                    q.isTrue = Math.random() > 0.5;
-                    q.fake = q.isTrue ? w.en : pool[Math.floor(Math.random()*pool.length)].en;
-                } else if (type === 'letters') {
-                    q.scrambled = w.en.split('').sort(() => 0.5 - Math.random()).join(' ');
-                }
+                let q = { word: w, type, userAns: "", isChecked: false };
+                if (type === 'choice') q.opts = [w.en, ...pool.filter(x => x.en !== w.en).sort(() => 0.5 - Math.random()).slice(0, 2).map(x => x.en)].sort(() => 0.5 - Math.random());
+                if (type === 'tf') { q.isTrue = Math.random() > 0.5; q.fake = q.isTrue ? w.en : pool[Math.floor(Math.random()*pool.length)].en; }
+                if (type === 'letters') q.scrambled = w.en.split('').sort(() => 0.5 - Math.random()).join(' ');
                 return q;
             });
 
-            renderTestBody();
+            curIdx = 0;
+            renderQuestion();
             document.getElementById('testConfig').style.display = 'none';
             document.getElementById('testActive').style.display = 'block';
         };
 
-        function renderTestBody(showRes = false) {
-            const cont = document.getElementById('testQuestions');
-            cont.innerHTML = currentTest.map((q, i) => {
-                const corr = isCorrect(q);
-                let h = `<div class="q-card ${showRes ? (corr ? 'q-correct' : 'q-wrong') : ''}">`;
-                if (q.type === 'choice') {
-                    h += `<p>${q.word.ru}:</p><div class="grid">${q.opts.map(o => `<button class="opt-btn ${q.userAns === o ? 'active' : ''}" onclick="setAns(${i},'${o}')">${o}</button>`).join('')}</div>`;
-                } else if (q.type === 'tf') {
-                    h += `<p>${q.word.ru} = ${q.fake}?</p><div class="grid" style="grid-template-columns:1fr 1fr"><button class="opt-btn ${q.userAns==='t'?'active':''}" onclick="setAns(${i},'t')">Да</button><button class="opt-btn ${q.userAns==='f'?'active':''}" onclick="setAns(${i},'f')">Нет</button></div>`;
-                } else if (q.type === 'letters') {
-                    h += `<p>${q.word.ru} (${q.scrambled}):</p><input type="text" class="inp" oninput="setAns(${i},this.value)" value="${q.userAns}">`;
-                } else {
-                    h += `<p>Переведи "${q.word.ru}":</p><input type="text" class="inp" oninput="setAns(${i},this.value)" value="${q.userAns}">`;
-                }
-                if (showRes && !corr) h += `<div style="color:red; font-size:14px; margin-top:5px">Правильно: ${q.word.en}</div>`;
-                return h + `</div>`;
-            }).join('');
-        }
-
-        window.setAns = (i, val) => { currentTest[i].userAns = val; renderTestBody(); };
-
-        function isCorrect(q) {
-            if (q.type === 'tf') return q.userAns === (q.isTrue ? 't' : 'f');
-            return q.userAns.toLowerCase().trim() === q.word.en.toLowerCase().trim();
-        }
-
-        window.finishTest = async () => {
-            renderTestBody(true);
-            document.getElementById('btnFin').style.display = 'none';
-            document.getElementById('btnBack').style.display = 'block';
+        function renderQuestion() {
+            const q = currentTest[curIdx];
+            const cont = document.getElementById('qArea');
+            let h = `<div class="white-window">`;
+            h += `<div class="step-counter">Вопрос ${curIdx + 1} из ${currentTest.length}</div>`;
             
+            if (q.type === 'choice') h += `<p>${q.word.ru}:</p><div class="grid">${q.opts.map(o => `<button class="opt-btn ${q.userAns === o ? 'active' : ''}" onclick="setAns('${o}')">${o}</button>`).join('')}</div>`;
+            else if (q.type === 'tf') h += `<p>${q.word.ru} = ${q.fake}?</p><div class="grid" style="grid-template-columns:1fr 1fr"><button class="opt-btn ${q.userAns==='t'?'active':''}" onclick="setAns('t')">Да</button><button class="opt-btn ${q.userAns==='f'?'active':''}" onclick="setAns('f')">Нет</button></div>`;
+            else if (q.type === 'letters') h += `<p>${q.word.ru}: <span class="hint">${q.scrambled}</span></p><input type="text" class="inp" oninput="setAns(this.value)" value="${q.userAns}">`;
+            else h += `<p>Переведи "${q.word.ru}":</p><input type="text" class="inp" oninput="setAns(this.value)" value="${q.userAns}">`;
+            
+            cont.innerHTML = h + `</div>`;
+            document.getElementById('nextBtn').innerText = (curIdx === currentTest.length - 1) ? "Завершить" : "Дальше →";
+        }
+
+        window.setAns = (v) => { currentTest[curIdx].userAns = v; renderQuestion(); };
+
+        window.nextStep = () => {
+            if (curIdx < currentTest.length - 1) {
+                curIdx++;
+                renderQuestion();
+            } else {
+                showResults();
+            }
+        };
+
+        async function showResults() {
+            document.getElementById('testActive').style.display = 'none';
+            const resArea = document.getElementById('testResult');
+            resArea.style.display = 'block';
+            
+            let correctCount = 0;
+            resArea.innerHTML = currentTest.map(q => {
+                const corr = isCorrect(q);
+                if (corr) correctCount++;
+                return `<div class="white-window ${corr?'q-correct':'q-wrong'}">
+                    <p>${q.word.ru} - <b>${q.word.en}</b></p>
+                    <small>${corr ? '✅ Верно' : '❌ Ошибка (твой ответ: ' + (q.userAns||'пусто') + ')'}</small>
+                </div>`;
+            }).join('') + `<button class="btn-green" onclick="resetTestUI()">Пройти еще раз</button>`;
+            
+            // Стрик
             const today = new Date().toDateString();
             if (state.lastDate !== today) {
                 state.streak++;
                 state.lastDate = today;
-                updateStreakUI();
-                const user = auth.currentUser;
-                if (user) await updateDoc(doc(db, "users", user.uid), { streak: state.streak, lastDate: state.lastDate });
+                await updateDoc(doc(db, "users", auth.currentUser.uid), { streak: state.streak, lastDate: state.lastDate });
             }
-        };
+        }
+
+        function isCorrect(q) {
+            if (q.type === 'tf') return q.userAns === (q.fake === q.word.en ? 't' : 'f');
+            return q.userAns.toLowerCase().trim() === q.word.en.toLowerCase().trim();
+        }
 
         // --- ДОБАВЛЕНИЕ ---
         window.saveNewWords = async () => {
@@ -199,93 +181,90 @@
                 const p = line.split(';');
                 if (p.length === 2) state.words.push({ en: p[0].trim(), ru: p[1].trim(), cat: cat });
             });
-            const user = auth.currentUser;
-            if (user) await updateDoc(doc(db, "users", user.uid), { words: state.words });
-            alert("Сохранено!");
+            await updateDoc(doc(db, "users", auth.currentUser.uid), { words: state.words });
+            alert("Готово!");
             renderFolders();
-            showTab('addTab');
         };
 
     </script>
     <style>
-        body { font-family: -apple-system, sans-serif; background: #0f0f1e; color: white; margin: 0; padding: 15px; -webkit-tap-highlight-color: transparent; }
+        body { font-family: -apple-system, sans-serif; background: #121225; color: white; margin: 0; padding: 10px; }
         #authSection { height: 90vh; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-        .streak-fire { font-size: 22px; color: #ff9f43; font-weight: bold; text-align: center; margin-bottom: 15px; }
-        .nav-menu { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
-        .nav-menu button { padding: 16px; border: none; background: #341f97; color: white; border-radius: 14px; font-weight: bold; font-size: 14px; }
+        .nav-menu { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+        .nav-menu button { padding: 15px; border: none; background: #3498db; color: white; border-radius: 15px; font-weight: bold; }
         
-        .card-wrap { perspective: 1000px; height: 220px; margin-bottom: 20px; }
-        .card-inner { position: relative; width: 100%; height: 100%; transition: transform 0.5s; transform-style: preserve-3d; }
-        .card-inner.flipped { transform: rotateY(180deg); }
-        .card-front, .card-back { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; display: flex; align-items: center; justify-content: center; border-radius: 20px; font-size: 26px; font-weight: bold; background: white; color: #2d3436; padding: 20px; text-align: center; box-shadow: 0 8px 15px rgba(0,0,0,0.3); }
-        .card-back { transform: rotateY(180deg); background: #54a0ff; color: white; }
+        .white-window { background: white; color: #333; padding: 25px; border-radius: 20px; margin-bottom: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); }
+        .step-counter { font-size: 12px; color: #999; margin-bottom: 10px; text-transform: uppercase; }
+        .q-correct { border-left: 8px solid #2ecc71; }
+        .q-wrong { border-left: 8px solid #e74c3c; }
 
-        .q-card { background: #f1f2f6; color: #2f3542; padding: 15px; border-radius: 18px; margin-bottom: 12px; border-left: 6px solid transparent; }
-        .q-correct { border-left-color: #1dd1a1; }
-        .q-wrong { border-left-color: #ee5253; }
-        .grid { display: grid; gap: 8px; margin-top: 10px; }
-        .opt-btn { padding: 12px; border: 1px solid #dfe6e9; border-radius: 10px; background: white; cursor: pointer; font-weight: 600; }
-        .opt-btn.active { background: #54a0ff; color: white; border-color: #54a0ff; }
-        .inp { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #ced6e0; font-size: 16px; box-sizing: border-box; }
+        .card-wrap { perspective: 1000px; height: 250px; margin: 20px 0; }
+        .card-inner { position: relative; width: 100%; height: 100%; transition: transform 0.6s; transform-style: preserve-3d; }
+        .card-inner.flipped { transform: rotateY(180deg); }
+        .card-front, .card-back { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; display: flex; align-items: center; justify-content: center; border-radius: 20px; font-size: 28px; font-weight: bold; background: white; color: #333; text-align: center; }
+        .card-back { transform: rotateY(180deg); color: #3498db; }
+
+        .grid { display: grid; gap: 10px; margin-top: 15px; }
+        .opt-btn { padding: 15px; border: 1px solid #ddd; border-radius: 12px; background: #f8f9fa; font-weight: 600; cursor: pointer; }
+        .opt-btn.active { background: #3498db; color: white; }
+        .inp { width: 100%; padding: 15px; border-radius: 12px; border: 1px solid #ddd; font-size: 18px; box-sizing: border-box; }
+        .hint { color: #3498db; font-weight: bold; display: block; letter-spacing: 2px; }
         
-        .btn-green { background: #1dd1a1; color: white; border: none; padding: 16px; border-radius: 14px; width: 100%; font-weight: bold; font-size: 16px; margin-top: 10px; }
-        select { width: 100%; padding: 12px; margin-bottom: 10px; border-radius: 10px; background: #2f3542; color: white; border: none; }
-        textarea { width: 100%; height: 100px; border-radius: 12px; padding: 10px; box-sizing: border-box; border: none; margin-top: 5px; }
-        .logout { position: fixed; top: 15px; right: 15px; color: #ff6b6b; font-size: 14px; background: none; border: none; }
+        .btn-green { background: #2ecc71; color: white; border: none; padding: 18px; border-radius: 15px; width: 100%; font-weight: bold; font-size: 16px; margin-top: 10px; }
+        select { width: 100%; padding: 12px; margin-bottom: 10px; border-radius: 12px; }
+        textarea { width: 100%; height: 100px; border-radius: 15px; padding: 10px; box-sizing: border-box; margin-top: 10px; }
     </style>
 </head>
 <body>
 
     <div id="authSection">
-        <h1 style="font-size: 42px; margin-bottom: 5px;">English</h1>
-        <p style="opacity: 0.6; margin-bottom: 30px;">Твой личный учитель</p>
-        <button class="btn-green" style="width:auto; padding: 18px 40px;" onclick="login()">Войти через Google</button>
+        <h1>🚀 English Pro</h1>
+        <button class="btn-green" style="width:auto; padding: 15px 40px;" onclick="login()">Войти через Google</button>
     </div>
 
     <div id="mainApp" style="display:none;">
-        <button class="logout" onclick="logout()">Выйти</button>
-        <div id="streakLabel" class="streak-fire">🔥 Серия: 0</div>
-        
         <div class="nav-menu">
             <button onclick="showTab('cardsTab')">Карточки</button>
             <button onclick="showTab('testsTab')">Тесты</button>
-            <button onclick="showTab('addTab')">Слова</button>
-            <button onclick="alert('Скоро появится!')">Настройки</button>
+            <button onclick="showTab('addTab')">Добавить</button>
+            <button onclick="logout()">Выход</button>
         </div>
 
-        <div id="cardsTab" class="tab-content">
+        <div id="cardsTab" class="tab-content" style="margin-top:20px">
             <select id="cardCat" onchange="drawCard()"></select>
             <div class="card-wrap" id="cardBox"></div>
-            <button class="btn-green" style="background:#2f3542" onclick="drawCard()">Следующее →</button>
+            <button class="btn-green" style="background:#2f3542" onclick="drawCard()">Дальше →</button>
         </div>
 
-        <div id="testsTab" class="tab-content" style="display:none;">
+        <div id="testsTab" class="tab-content" style="display:none; margin-top:20px">
             <div id="testConfig">
-                <p style="margin:0 0 10px 0;">Настройка теста:</p>
-                <select id="testCat"></select>
-                <input type="number" id="testCount" value="5" class="inp" placeholder="Кол-во слов">
-                <div style="margin: 15px 0; background: #1e1e30; padding: 15px; border-radius: 12px;">
-                    <label><input type="checkbox" class="t-type" value="choice" checked> Выбор из 3-х</label><br>
-                    <label style="display:block; margin: 8px 0;"><input type="checkbox" class="t-type" value="tf" checked> Правда или Ложь</label>
-                    <label style="display:block; margin: 8px 0;"><input type="checkbox" class="t-type" value="letters" checked> Собрать из букв</label>
-                    <label><input type="checkbox" class="t-type" value="write" checked> Написать перевод</label>
+                <div class="white-window">
+                    <p style="margin:0">Настройки теста:</p>
+                    <select id="testCat" style="margin-top:10px"></select>
+                    <input type="number" id="testCount" value="5" class="inp" placeholder="Сколько слов?">
+                    <div style="margin-top:15px; font-size: 14px;">
+                        <label><input type="checkbox" class="t-type" value="choice" checked> Выбор варианта</label><br>
+                        <label><input type="checkbox" class="t-type" value="tf" checked> True/False</label><br>
+                        <label><input type="checkbox" class="t-type" value="letters" checked> Собрать из букв</label><br>
+                        <label><input type="checkbox" class="t-type" value="write" checked> Письмо</label>
+                    </div>
                 </div>
-                <button class="btn-green" onclick="startTest()">Начать тест</button>
+                <button class="btn-green" onclick="startTest()">Начать</button>
             </div>
+            
             <div id="testActive" style="display:none;">
-                <div id="testQuestions"></div>
-                <button id="btnFin" class="btn-green" onclick="finishTest()">Завершить тест</button>
-                <button id="btnBack" class="btn-green" style="display:none; background:#341f97" onclick="showTab('testsTab')">Назад к настройкам</button>
+                <div id="qArea"></div>
+                <button class="btn-green" id="nextBtn" onclick="nextStep()">Дальше →</button>
             </div>
+
+            <div id="testResult" style="display:none;"></div>
         </div>
 
-        <div id="addTab" class="tab-content" style="display:none;">
-            <div style="background: #1e1e30; padding: 20px; border-radius: 20px;">
-                <label>Название темы:</label>
-                <input type="text" id="newCatName" class="inp" placeholder="Напр: Еда">
-                <label style="display:block; margin-top:15px;">Слова (слово;перевод):</label>
-                <textarea id="newWordsText" placeholder="apple;яблоко&#10;car;машина"></textarea>
-                <button class="btn-green" onclick="saveNewWords()">Сохранить всё</button>
+        <div id="addTab" class="tab-content" style="display:none; margin-top:20px">
+            <div class="white-window">
+                <input type="text" id="newCatName" class="inp" placeholder="Название папки">
+                <textarea id="newWordsText" placeholder="apple;яблоко (через ;)"></textarea>
+                <button class="btn-green" onclick="saveNewWords()">Сохранить</button>
             </div>
         </div>
     </div>
