@@ -48,9 +48,8 @@
                 
                 if (snap.exists()) {
                     state = snap.data();
-                    // Если слов мало или нет, добавляем базу и обновляем облако
-                    if (!state.words || state.words.length < 5) {
-                        state.words = [...(state.words || []), ...baseWords];
+                    if (!state.words || state.words.length === 0) {
+                        state.words = [...baseWords];
                         await updateDoc(userRef, { words: state.words });
                     }
                 } else {
@@ -74,7 +73,7 @@
         window.drawCard = () => {
             const cardBox = document.getElementById('cardBox');
             if (!state.words || state.words.length === 0) {
-                cardBox.innerHTML = "Загрузка слов...";
+                cardBox.innerHTML = "Слова не найдены";
                 return;
             }
             const w = state.words[Math.floor(Math.random() * state.words.length)];
@@ -85,7 +84,7 @@
         };
 
         window.startTest = () => {
-            if (state.words.length < 3) return alert("Нужно больше слов для теста!");
+            if (state.words.length < 3) return alert("Нужно больше слов!");
             currentTest = [...state.words].sort(() => 0.5 - Math.random()).slice(0, 5).map(w => {
                 const isTF = Math.random() > 0.5;
                 return { 
@@ -142,17 +141,31 @@
             }).join('') + `<button class="main-btn" onclick="startTest()" style="margin-top:20px">НОВЫЙ ТЕСТ</button>`;
         }
 
+        // ОБНОВЛЕННАЯ ФУНКЦИЯ: можно вводить "слово;перевод" или через два поля
         window.addWord = async () => {
-            const en = document.getElementById('enIn').value.trim();
-            const ru = document.getElementById('ruIn').value.trim();
-            if (en && ru) {
-                state.words.push({ en, ru });
-                await updateDoc(doc(db, "users", auth.currentUser.uid), { words: state.words });
-                document.getElementById('enIn').value = '';
-                document.getElementById('ruIn').value = '';
-                alert("Слово добавлено!");
-                drawCard();
+            const enField = document.getElementById('enIn');
+            const ruField = document.getElementById('ruIn');
+            let enVal = enField.value.trim();
+            let ruVal = ruField.value.trim();
+
+            if (enVal.includes(';')) {
+                // Если введено в формате англ;рус
+                const parts = enVal.split(';');
+                if (parts.length >= 2) {
+                    state.words.push({ en: parts[0].trim(), ru: parts[1].trim() });
+                }
+            } else if (enVal && ruVal) {
+                // Обычный способ через два поля
+                state.words.push({ en: enVal, ru: ruVal });
+            } else {
+                return alert("Введите в формате 'слово;перевод' или заполните оба поля");
             }
+
+            await updateDoc(doc(db, "users", auth.currentUser.uid), { words: state.words });
+            enField.value = '';
+            ruField.value = '';
+            alert("Сохранено!");
+            drawCard();
         };
 
         window.resetTest = () => {
@@ -211,8 +224,8 @@
             </div>
 
             <div id="addTab" class="tab-content" style="display:none;">
-                <input id="enIn" placeholder="English word">
-                <input id="ruIn" placeholder="Перевод">
+                <input id="enIn" placeholder="English;перевод (или только англ)">
+                <input id="ruIn" placeholder="Перевод (если не использовали ';')">
                 <button class="main-btn" onclick="addWord()">СОХРАНИТЬ</button>
             </div>
         </div>
