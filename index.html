@@ -52,18 +52,24 @@
             changeTab('cardTab');
         }
 
+        async function saveData() {
+            await setDoc(doc(db, "users", currentUser.uid), { words: myWords });
+        }
+
         window.changeTab = (id) => {
             document.querySelectorAll('.section').forEach(s => s.style.display = 'none');
             document.getElementById(id).style.display = 'block';
             if(id === 'cardTab') initCard();
             if(id === 'writeTab') initWrite();
             if(id === 'testTab') startTest();
+            document.getElementById('wordCount').innerText = myWords.length;
         };
 
         // КАРТОЧКИ
         let currentWord = null;
         let isFlipped = false;
         window.initCard = () => {
+            if(!myWords.length) return document.getElementById('cardDisplay').innerText = "Добавь слова!";
             currentWord = myWords[Math.floor(Math.random()*myWords.length)];
             isFlipped = false;
             document.getElementById('cardDisplay').innerText = currentWord.ru;
@@ -78,33 +84,52 @@
             }
         };
 
-        // ДОБАВЛЕНИЕ
-        window.addNewWord = async () => {
-            const en = document.getElementById('newEn').value.trim();
-            const ru = document.getElementById('newRu').value.trim();
-            if(en && ru) {
-                myWords.push({en, ru});
-                await setDoc(doc(db, "users", currentUser.uid), { words: myWords });
-                document.getElementById('newEn').value = "";
-                document.getElementById('newRu').value = "";
-                alert("Сохранено!");
+        // МАССОВОЕ ДОБАВЛЕНИЕ
+        window.addBulkWords = async () => {
+            const text = document.getElementById('bulkText').value.trim();
+            if(!text) return;
+            
+            const lines = text.split('\n');
+            let addedCount = 0;
+
+            lines.forEach(line => {
+                const parts = line.split(';');
+                if(parts.length === 2) {
+                    myWords.push({ en: parts[0].trim(), ru: parts[1].trim() });
+                    addedCount++;
+                }
+            });
+
+            if(addedCount > 0) {
+                await saveData();
+                document.getElementById('bulkText').value = "";
+                alert(`Успешно добавлено слов: ${addedCount}`);
+                document.getElementById('wordCount').innerText = myWords.length;
+            } else {
+                alert("Ошибка формата! Используй: англ;рус");
             }
         };
 
         // НАПИСАНИЕ
         window.initWrite = () => {
+            if(!myWords.length) return;
             currentWord = myWords[Math.floor(Math.random()*myWords.length)];
             document.getElementById('writeQuest').innerText = currentWord.ru;
             document.getElementById('writeInput').value = "";
         };
         window.checkWrite = () => {
-            if(document.getElementById('writeInput').value.toLowerCase().trim() === currentWord.en.toLowerCase()) {
-                alert("Правильно!"); initWrite();
-            } else alert("Ошибка!");
+            const userAns = document.getElementById('writeInput').value.toLowerCase().trim();
+            if(userAns === currentWord.en.toLowerCase()) {
+                alert("Правильно! ✨"); 
+                initWrite();
+            } else {
+                alert(`Ошибка! ❌\nПравильный ответ: ${currentWord.en}`);
+            }
         };
 
         // ТЕСТ
         window.startTest = () => {
+            if(!myWords.length) return;
             let q = myWords[Math.floor(Math.random()*myWords.length)];
             document.getElementById('testQuest').innerText = `Как переводится "${q.ru}"?`;
             let opts = [q.en];
@@ -114,26 +139,35 @@
             }
             opts.sort(() => 0.5 - Math.random());
             document.getElementById('testOptions').innerHTML = opts.map(o => 
-                `<button class="btn-main" style="margin:5px 0" onclick="checkTestAnswer('${o}','${q.en}')">${o}</button>`
+                `<button class="btn-opt" onclick="checkTestAnswer('${o}','${q.en}')">${o}</button>`
             ).join('');
         };
         window.checkTestAnswer = (val, ans) => {
-            if(val === ans) { alert("Верно!"); startTest(); }
-            else alert("Неверно!");
+            if(val === ans) { 
+                alert("Верно! 🔥"); 
+                startTest(); 
+            } else {
+                alert(`Неверно! ❌\nПравильный ответ был: ${ans}`);
+                startTest();
+            }
         };
 
     </script>
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; margin: 0; display: flex; justify-content: center; min-height: 100vh; color: white; }
         #authSection, #mainApp { display: flex; flex-direction: column; align-items: center; width: 100%; padding: 20px; box-sizing: border-box; }
-        .app-header { font-size: 2.5rem; font-weight: bold; margin: 20px 0; }
-        .menu { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-bottom: 25px; }
-        .menu button { padding: 12px 18px; border: none; border-radius: 12px; background: #007bff; color: white; font-weight: bold; cursor: pointer; }
-        .container { background: white; color: #333; padding: 40px; border-radius: 30px; width: 100%; max-width: 600px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
-        .card-box { padding: 60px 20px; border: 2px dashed #007bff; border-radius: 20px; font-size: 32px; font-weight: bold; cursor: pointer; margin-bottom: 20px; }
-        input { width: 100%; padding: 15px; margin: 10px 0; border: 1px solid #ddd; border-radius: 12px; box-sizing: border-box; font-size: 16px; }
+        .app-header { font-size: 2.2rem; font-weight: bold; margin: 20px 0; color: #fff; text-shadow: 0 0 10px rgba(0,123,255,0.5); }
+        .menu { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 25px; }
+        .menu button { padding: 10px 15px; border: none; border-radius: 10px; background: #007bff; color: white; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .menu button:hover { background: #0056b3; }
+        .container { background: white; color: #333; padding: 30px; border-radius: 25px; width: 100%; max-width: 550px; text-align: center; box-shadow: 0 15px 40px rgba(0,0,0,0.6); }
+        .card-box { padding: 60px 20px; border: 3px dashed #007bff; border-radius: 20px; font-size: 30px; font-weight: bold; cursor: pointer; margin-bottom: 20px; background: #f8f9fa; }
+        textarea, input { width: 100%; padding: 15px; margin: 10px 0; border: 2px solid #ddd; border-radius: 12px; box-sizing: border-box; font-size: 16px; font-family: inherit; }
         .btn-main { background: #28a745; color: white; border: none; padding: 15px; border-radius: 12px; width: 100%; cursor: pointer; font-size: 18px; font-weight: bold; }
-        .google-btn { background: white; color: #333; padding: 15px 30px; border-radius: 15px; border: none; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 10px; margin-top: 100px; }
+        .btn-opt { background: #f1f1f1; border: 2px solid #ddd; padding: 12px; margin: 5px 0; width: 100%; border-radius: 10px; cursor: pointer; font-weight: bold; font-size: 16px; }
+        .btn-opt:hover { background: #e2e2e2; border-color: #007bff; }
+        .google-btn { background: white; color: #333; padding: 15px 30px; border-radius: 15px; border: none; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 10px; margin-top: 100px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        .info-text { font-size: 13px; color: #666; margin-top: 5px; }
     </style>
 </head>
 <body>
@@ -173,10 +207,12 @@
             </div>
 
             <div id="addTab" class="section" style="display:none">
-                <h3>Добавить новое слово</h3>
-                <input type="text" id="newEn" placeholder="English">
-                <input type="text" id="newRu" placeholder="Русский">
-                <button class="btn-main" onclick="addNewWord()">Сохранить в облако</button>
+                <h3>Добавить много слов</h3>
+                <p class="info-text">Вводи формат: <b>английский;русский</b><br>(каждое слово с новой строки)</p>
+                <textarea id="bulkText" rows="6" placeholder="apple;яблоко&#10;dog;собака&#10;car;машина"></textarea>
+                <button class="btn-main" onclick="addBulkWords()">Добавить в облако</button>
+                <hr>
+                <p>Всего слов в словаре: <b id="wordCount">0</b></p>
             </div>
         </div>
     </div>
