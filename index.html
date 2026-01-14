@@ -26,11 +26,9 @@
         let currentUser = null;
         let myWords = [];
 
-        // ВХОД ЧЕРЕЗ GOOGLE
         window.loginWithGoogle = async () => {
-            try {
-                await signInWithPopup(auth, provider);
-            } catch (e) { alert("Ошибка входа: " + e.message); }
+            try { await signInWithPopup(auth, provider); } 
+            catch (e) { alert("Ошибка: " + e.message); }
         };
 
         window.logOut = () => signOut(auth);
@@ -50,12 +48,12 @@
         async function loadData() {
             const docRef = doc(db, "users", currentUser.uid);
             const docSnap = await getDoc(docRef);
-            if (docSnap.exists()) {
-                myWords = docSnap.data().words || [];
-            } else {
-                await setDoc(docRef, { words: [] });
-            }
+            myWords = docSnap.exists() ? (docSnap.data().words || []) : [];
             initCard();
+        }
+
+        async function saveData() {
+            await setDoc(doc(db, "users", currentUser.uid), { words: myWords });
         }
 
         window.addWord = async () => {
@@ -63,38 +61,75 @@
             const ru = document.getElementById('ruIn').value.trim();
             if(en && ru) {
                 myWords.push({en, ru});
-                await setDoc(doc(db, "users", currentUser.uid), { words: myWords });
+                await saveData();
                 document.getElementById('enIn').value = "";
                 document.getElementById('ruIn').value = "";
                 alert("Сохранено!");
             }
         };
 
+        let currentCard = null;
         window.initCard = () => {
             const t = document.getElementById('cardText');
             if(!myWords.length) { t.innerText = "Добавь слова!"; return; }
-            const word = myWords[Math.floor(Math.random()*myWords.length)];
-            t.innerText = word.ru;
-            t.onclick = () => t.innerText = (t.innerText === word.ru ? word.en : word.ru);
+            currentCard = myWords[Math.floor(Math.random()*myWords.length)];
+            t.innerText = currentCard.ru;
+        };
+
+        window.flipCard = () => {
+            const t = document.getElementById('cardText');
+            t.innerText = (t.innerText === currentCard.ru) ? currentCard.en : currentCard.ru;
+        };
+
+        // Игра "Собери слово"
+        let buildWord = null;
+        let currentStr = "";
+        window.initGame = () => {
+            if(!myWords.length) return alert("Сначала добавь слова!");
+            buildWord = myWords[Math.floor(Math.random()*myWords.length)];
+            currentStr = "";
+            document.getElementById('gQuest').innerText = buildWord.ru;
+            document.getElementById('gInput').innerText = "_";
+            const letters = buildWord.en.split('').sort(() => 0.5 - Math.random());
+            document.getElementById('letters').innerHTML = letters.map(l => `<button class="l-btn" onclick="press('${l}', this)">${l}</button>`).join('');
+        };
+
+        window.press = (l, btn) => {
+            currentStr += l;
+            document.getElementById('gInput').innerText = currentStr;
+            btn.style.visibility = "hidden";
+            if(currentStr.length === buildWord.en.length) {
+                if(currentStr.toLowerCase() === buildWord.en.toLowerCase()) alert("Верно! 🔥");
+                else alert("Ошибка! Было: " + buildWord.en);
+                initGame();
+            }
         };
 
         window.showTab = (id) => {
             document.querySelectorAll('.tab').forEach(t => t.style.display = 'none');
             document.getElementById(id).style.display = 'block';
+            if(id === 'game') initGame();
+            if(id === 'learn') initCard();
         };
     </script>
     <style>
-        body { font-family: sans-serif; background: #0f3460; color: white; text-align: center; padding: 20px; }
-        .box { background: #16213e; padding: 25px; border-radius: 20px; max-width: 400px; margin: auto; }
-        button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 10px; border: none; background: #e94560; color: white; font-weight: bold; cursor: pointer; }
+        body { font-family: 'Segoe UI', sans-serif; background: #0f3460; color: white; text-align: center; margin: 0; padding: 20px; }
+        .box { background: #16213e; padding: 25px; border-radius: 20px; max-width: 400px; margin: 20px auto; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid #1f4068; }
+        input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 10px; border: none; box-sizing: border-box; background: #1a1a2e; color: white; border: 1px solid #e94560; }
+        button { width: 100%; padding: 12px; margin: 5px 0; border-radius: 10px; border: none; background: #e94560; color: white; font-weight: bold; cursor: pointer; transition: 0.3s; }
+        button:hover { background: #ff5e78; transform: scale(1.02); }
+        .nav-btn { width: auto; background: #533483; padding: 10px 12px; font-size: 12px; flex: 1; }
+        .card { background: #1a1a2e; height: 180px; display: flex; align-items: center; justify-content: center; font-size: 28px; border-radius: 15px; cursor: pointer; margin: 20px 0; border: 2px dashed #e94560; box-shadow: inset 0 0 15px rgba(233, 69, 96, 0.2); }
+        .l-btn { width: 40px; height: 40px; margin: 4px; background: #e94560; color: white; border: none; border-radius: 8px; font-size: 18px; cursor: pointer; }
+        .tab { display: none; }
         .google-btn { background: white; color: #444; display: flex; align-items: center; justify-content: center; gap: 10px; }
-        input { width: 100%; padding: 10px; margin: 5px 0; border-radius: 8px; border: none; box-sizing: border-box; }
-        .card { background: #1a1a2e; height: 150px; display: flex; align-items: center; justify-content: center; font-size: 24px; border-radius: 15px; margin: 20px 0; border: 2px dashed #e94560; cursor: pointer; }
     </style>
 </head>
 <body>
+
     <div id="authSection" class="box">
-        <h2>English Pro Sync</h2>
+        <h2 style="color: #e94560;">English Pro Sync</h2>
+        <p>Для входа используйте Google:</p>
         <button class="google-btn" onclick="loginWithGoogle()">
             <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="20">
             Войти через Google
@@ -103,21 +138,33 @@
 
     <div id="mainApp" style="display:none">
         <div class="box">
-            <button onclick="showTab('learn')">Учить</button>
-            <button onclick="showTab('add')">➕ Добавить</button>
-            <button onclick="logOut()" style="background:#333">Выход</button>
-            
-            <div id="learn" class="tab">
-                <div class="card" id="cardText">...</div>
-                <button onclick="initCard()">Дальше</button>
+            <div style="display: flex; gap: 5px; margin-bottom: 20px;">
+                <button class="nav-btn" onclick="showTab('learn')">Карточки</button>
+                <button class="nav-btn" onclick="showTab('game')">Игра</button>
+                <button class="nav-btn" onclick="showTab('add')">➕</button>
+                <button class="nav-btn" onclick="logOut()" style="background: #222;">Выход</button>
             </div>
-            
-            <div id="add" class="tab" style="display:none">
+
+            <div id="learn" class="tab" style="display: block;">
+                <div class="card" id="cardText" onclick="flipCard()">...</div>
+                <button onclick="initCard()">Следующее →</button>
+            </div>
+
+            <div id="game" class="tab">
+                <h3 id="gQuest">...</h3>
+                <div id="gInput" style="font-size: 24px; color: #e94560; margin: 15px; min-height: 30px;"></div>
+                <div id="letters"></div>
+                <button onclick="initGame()" style="background: transparent; font-size: 11px;">Перемешать</button>
+            </div>
+
+            <div id="add" class="tab">
+                <h3>Новое слово</h3>
                 <input id="enIn" placeholder="English">
                 <input id="ruIn" placeholder="Русский">
-                <button onclick="addWord()">Сохранить</button>
+                <button onclick="addWord()">Сохранить в облако</button>
             </div>
         </div>
     </div>
+
 </body>
 </html>
