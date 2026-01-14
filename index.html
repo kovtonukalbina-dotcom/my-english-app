@@ -9,13 +9,15 @@
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
+        // ТВОЙ НОВЫЙ КОНФИГ (ПРОЕКТ llla-f3cd0)
         const firebaseConfig = {
-            apiKey: "AIzaSyB08h5m5cqOcRXNNzHhnIFLTLAjd0kk754",
-            authDomain: "bebe-615c2.firebaseapp.com",
-            projectId: "bebe-615c2",
-            storageBucket: "bebe-615c2.firebasestorage.app",
-            messagingSenderId: "913901689922",
-            appId: "1:913901689922:web:e72c374ac142486e8061db"
+            apiKey: "AIzaSyB7vbQ1BQya7SWIsGByt6pLtnkX-0WG1I8",
+            authDomain: "llla-f3cd0.firebaseapp.com",
+            projectId: "llla-f3cd0",
+            storageBucket: "llla-f3cd0.firebasestorage.app",
+            messagingSenderId: "976940645729",
+            appId: "1:976940645729:web:0a6a820a6a76156cf11920",
+            measurementId: "G-4FWZXCKYX6"
         };
 
         const app = initializeApp(firebaseConfig);
@@ -27,32 +29,37 @@
 
         // Авторизация
         window.handleAuth = async (type) => {
-            const email = document.getElementById('email').value;
-            const pass = document.getElementById('pass').value;
-            if(!email || !pass) return alert("Заполни поля!");
+            const email = document.getElementById('authEmail').value;
+            const pass = document.getElementById('authPass').value;
+            if(!email || !pass) return alert("Введите почту и пароль!");
             try {
-                if(type === 'reg') await createUserWithEmailAndPassword(auth, email, pass);
+                if (type === 'reg') await createUserWithEmailAndPassword(auth, email, pass);
                 else await signInWithEmailAndPassword(auth, email, pass);
-            } catch(e) { alert("Ошибка: " + e.message); }
+            } catch (e) { alert("Ошибка: " + e.message); }
         };
 
-        window.logout = () => signOut(auth);
+        window.logOut = () => signOut(auth);
 
         onAuthStateChanged(auth, async (user) => {
-            if(user) {
+            if (user) {
                 currentUser = user;
-                document.getElementById('authBlock').style.display = 'none';
-                document.getElementById('appBlock').style.display = 'block';
+                document.getElementById('authSection').style.display = 'none';
+                document.getElementById('mainApp').style.display = 'block';
                 await loadData();
             } else {
-                document.getElementById('authBlock').style.display = 'block';
-                document.getElementById('appBlock').style.display = 'none';
+                document.getElementById('authSection').style.display = 'block';
+                document.getElementById('mainApp').style.display = 'none';
             }
         });
 
         async function loadData() {
-            const snap = await getDoc(doc(db, "users", currentUser.uid));
-            myWords = snap.exists() ? snap.data().words : [];
+            const docRef = doc(db, "users", currentUser.uid);
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                myWords = docSnap.data().words || [];
+            } else {
+                await setDoc(docRef, { words: [] });
+            }
             initCard();
         }
 
@@ -60,68 +67,84 @@
             await setDoc(doc(db, "users", currentUser.uid), { words: myWords });
         }
 
-        // Логика приложения
+        // Карточки
+        let currentCard = null;
+        window.initCard = () => {
+            const cardElement = document.getElementById('cardText');
+            if(!myWords.length) { cardElement.innerText = "Добавьте слова в меню ➕"; return; }
+            currentCard = myWords[Math.floor(Math.random() * myWords.length)];
+            cardElement.innerText = currentCard.ru;
+        };
+
+        window.flipCard = () => {
+            const t = document.getElementById('cardText');
+            t.innerText = (t.innerText === currentCard.ru) ? currentCard.en : currentCard.ru;
+        };
+
+        // Добавление слов
         window.addWord = async () => {
-            const en = document.getElementById('enIn').value;
-            const ru = document.getElementById('ruIn').value;
+            const en = document.getElementById('enIn').value.trim();
+            const ru = document.getElementById('ruIn').value.trim();
             if(en && ru) {
                 myWords.push({en, ru});
                 await saveData();
-                document.getElementById('enIn').value = '';
-                document.getElementById('ruIn').value = '';
-                alert("Сохранено!");
+                document.getElementById('enIn').value = "";
+                document.getElementById('ruIn').value = "";
+                alert("Слово сохранено в облако!");
             }
-        };
-
-        window.initCard = () => {
-            const cardBox = document.getElementById('cardDisplay');
-            if(!myWords.length) { cardBox.innerText = "Добавь слова!"; return; }
-            const word = myWords[Math.floor(Math.random()*myWords.length)];
-            cardBox.innerText = word.ru;
-            cardBox.onclick = () => cardBox.innerText = (cardBox.innerText === word.ru ? word.en : word.ru);
         };
 
         window.showTab = (id) => {
             document.querySelectorAll('.tab').forEach(t => t.style.display = 'none');
             document.getElementById(id).style.display = 'block';
+            if(id === 'learn') initCard();
         };
+
     </script>
     <style>
-        body { background: #1a1a2e; color: #fff; font-family: sans-serif; text-align: center; padding: 20px; }
-        .box { background: #16213e; padding: 20px; border-radius: 20px; max-width: 400px; margin: auto; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
-        input { width: 90%; padding: 12px; margin: 10px 0; border-radius: 10px; border: none; }
-        button { width: 90%; padding: 12px; margin: 5px; border-radius: 10px; border: none; background: #e94560; color: #fff; font-weight: bold; cursor: pointer; }
-        .card { background: #0f3460; height: 150px; display: flex; align-items: center; justify-content: center; font-size: 24px; border-radius: 15px; margin: 20px 0; cursor: pointer; border: 2px solid #e94560; }
-        .nav { display: flex; justify-content: space-around; margin-bottom: 20px; }
-        .nav button { width: auto; padding: 10px; background: #533483; font-size: 12px; }
+        body { font-family: 'Segoe UI', sans-serif; background: #0f3460; color: white; text-align: center; margin: 0; padding: 20px; }
+        .box { background: #16213e; padding: 25px; border-radius: 20px; max-width: 400px; margin: 20px auto; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 10px; border: none; box-sizing: border-box; font-size: 16px; }
+        button { width: 100%; padding: 12px; margin: 5px 0; border-radius: 10px; border: none; background: #e94560; color: white; font-weight: bold; cursor: pointer; transition: 0.3s; }
+        button:hover { background: #ff5e78; }
+        .nav-btn { width: auto; background: #533483; padding: 10px 15px; font-size: 14px; }
+        .card { background: #1a1a2e; height: 180px; display: flex; align-items: center; justify-content: center; font-size: 28px; border-radius: 15px; cursor: pointer; margin: 20px 0; border: 2px dashed #e94560; }
+        .tab { display: none; }
+        .active-tab { display: block; }
     </style>
 </head>
 <body>
-    <div id="authBlock" class="box">
-        <h2>English App 🚀</h2>
-        <input id="email" type="email" placeholder="Email">
-        <input id="pass" type="password" placeholder="Пароль">
+
+    <div id="authSection" class="box">
+        <h2>English Pro 📚</h2>
+        <p style="color: #aaa; font-size: 14px;">Войдите, чтобы ваши слова сохранялись</p>
+        <input type="email" id="authEmail" placeholder="Ваша почта">
+        <input type="password" id="authPass" placeholder="Пароль">
         <button onclick="handleAuth('login')">Войти</button>
-        <button onclick="handleAuth('reg')" style="background: #533483">Создать аккаунт</button>
+        <button onclick="handleAuth('reg')" style="background: #533483;">Создать аккаунт</button>
     </div>
 
-    <div id="appBlock" style="display:none">
-        <div class="nav">
-            <button onclick="showTab('learn')">Учить</button>
-            <button onclick="showTab('add')">➕ Слово</button>
-            <button onclick="logout()" style="background:#222">Выход</button>
-        </div>
+    <div id="mainApp" style="display:none">
         <div class="box">
-            <div id="learn" class="tab">
-                <div class="card" id="cardDisplay">Нажми</div>
-                <button onclick="initCard()">Следующее →</button>
+            <div style="display: flex; justify-content: space-around; margin-bottom: 20px;">
+                <button class="nav-btn" onclick="showTab('learn')">Учить</button>
+                <button class="nav-btn" onclick="showTab('add')">➕ Слово</button>
+                <button class="nav-btn" onclick="logOut()" style="background: #222;">Выход</button>
             </div>
-            <div id="add" class="tab" style="display:none">
-                <input id="enIn" placeholder="English">
-                <input id="ruIn" placeholder="Русский">
+
+            <div id="learn" class="tab active-tab">
+                <div class="card" id="cardText" onclick="flipCard()">Нажми, чтобы начать</div>
+                <button onclick="initCard()">Следующее слово →</button>
+            </div>
+
+            <div id="add" class="tab">
+                <h3>Добавить слово</h3>
+                <input id="enIn" placeholder="English (например: Apple)">
+                <input id="ruIn" placeholder="Русский (например: Яблоко)">
                 <button onclick="addWord()">Сохранить в облако</button>
             </div>
         </div>
     </div>
+
 </body>
 </html>
