@@ -1,1 +1,127 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>English Pro Sync</title>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
+        const firebaseConfig = {
+            apiKey: "AIzaSyB08h5m5cqOcRXNNzHhnIFLTLAjd0kk754",
+            authDomain: "bebe-615c2.firebaseapp.com",
+            projectId: "bebe-615c2",
+            storageBucket: "bebe-615c2.firebasestorage.app",
+            messagingSenderId: "913901689922",
+            appId: "1:913901689922:web:e72c374ac142486e8061db"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        let currentUser = null;
+        let myWords = [];
+
+        // Авторизация
+        window.handleAuth = async (type) => {
+            const email = document.getElementById('email').value;
+            const pass = document.getElementById('pass').value;
+            if(!email || !pass) return alert("Заполни поля!");
+            try {
+                if(type === 'reg') await createUserWithEmailAndPassword(auth, email, pass);
+                else await signInWithEmailAndPassword(auth, email, pass);
+            } catch(e) { alert("Ошибка: " + e.message); }
+        };
+
+        window.logout = () => signOut(auth);
+
+        onAuthStateChanged(auth, async (user) => {
+            if(user) {
+                currentUser = user;
+                document.getElementById('authBlock').style.display = 'none';
+                document.getElementById('appBlock').style.display = 'block';
+                await loadData();
+            } else {
+                document.getElementById('authBlock').style.display = 'block';
+                document.getElementById('appBlock').style.display = 'none';
+            }
+        });
+
+        async function loadData() {
+            const snap = await getDoc(doc(db, "users", currentUser.uid));
+            myWords = snap.exists() ? snap.data().words : [];
+            initCard();
+        }
+
+        async function saveData() {
+            await setDoc(doc(db, "users", currentUser.uid), { words: myWords });
+        }
+
+        // Логика приложения
+        window.addWord = async () => {
+            const en = document.getElementById('enIn').value;
+            const ru = document.getElementById('ruIn').value;
+            if(en && ru) {
+                myWords.push({en, ru});
+                await saveData();
+                document.getElementById('enIn').value = '';
+                document.getElementById('ruIn').value = '';
+                alert("Сохранено!");
+            }
+        };
+
+        window.initCard = () => {
+            const cardBox = document.getElementById('cardDisplay');
+            if(!myWords.length) { cardBox.innerText = "Добавь слова!"; return; }
+            const word = myWords[Math.floor(Math.random()*myWords.length)];
+            cardBox.innerText = word.ru;
+            cardBox.onclick = () => cardBox.innerText = (cardBox.innerText === word.ru ? word.en : word.ru);
+        };
+
+        window.showTab = (id) => {
+            document.querySelectorAll('.tab').forEach(t => t.style.display = 'none');
+            document.getElementById(id).style.display = 'block';
+        };
+    </script>
+    <style>
+        body { background: #1a1a2e; color: #fff; font-family: sans-serif; text-align: center; padding: 20px; }
+        .box { background: #16213e; padding: 20px; border-radius: 20px; max-width: 400px; margin: auto; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
+        input { width: 90%; padding: 12px; margin: 10px 0; border-radius: 10px; border: none; }
+        button { width: 90%; padding: 12px; margin: 5px; border-radius: 10px; border: none; background: #e94560; color: #fff; font-weight: bold; cursor: pointer; }
+        .card { background: #0f3460; height: 150px; display: flex; align-items: center; justify-content: center; font-size: 24px; border-radius: 15px; margin: 20px 0; cursor: pointer; border: 2px solid #e94560; }
+        .nav { display: flex; justify-content: space-around; margin-bottom: 20px; }
+        .nav button { width: auto; padding: 10px; background: #533483; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div id="authBlock" class="box">
+        <h2>English App 🚀</h2>
+        <input id="email" type="email" placeholder="Email">
+        <input id="pass" type="password" placeholder="Пароль">
+        <button onclick="handleAuth('login')">Войти</button>
+        <button onclick="handleAuth('reg')" style="background: #533483">Создать аккаунт</button>
+    </div>
+
+    <div id="appBlock" style="display:none">
+        <div class="nav">
+            <button onclick="showTab('learn')">Учить</button>
+            <button onclick="showTab('add')">➕ Слово</button>
+            <button onclick="logout()" style="background:#222">Выход</button>
+        </div>
+        <div class="box">
+            <div id="learn" class="tab">
+                <div class="card" id="cardDisplay">Нажми</div>
+                <button onclick="initCard()">Следующее →</button>
+            </div>
+            <div id="add" class="tab" style="display:none">
+                <input id="enIn" placeholder="English">
+                <input id="ruIn" placeholder="Русский">
+                <button onclick="addWord()">Сохранить в облако</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
