@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>English App Final</title>
+    <title>English Pro Max Sync</title>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -21,39 +21,54 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const provider = new GoogleAuthProvider();
 
         let currentUser = null;
         let myWords = [];
         let activeTest = [];
 
-        // Озвучка
-        window.speak = (text) => {
+        window.speak = (t) => {
             window.speechSynthesis.cancel();
-            const msg = new SpeechSynthesisUtterance(text);
-            msg.lang = 'en-US';
-            window.speechSynthesis.speak(msg);
+            let m = new SpeechSynthesisUtterance(t);
+            m.lang = 'en-US';
+            window.speechSynthesis.speak(m);
         };
 
-        // Вход и Выход
-        window.login = () => signInWithPopup(auth, provider);
-        window.logout = () => signOut(auth).then(() => location.reload());
+        // Вход с выбором аккаунта
+        window.login = async () => {
+            const provider = new GoogleAuthProvider();
+            provider.setCustomParameters({ prompt: 'select_account' });
+            try {
+                await setPersistence(auth, browserLocalPersistence);
+                await signInWithPopup(auth, provider);
+            } catch (e) { alert("Ошибка входа: " + e.message); }
+        };
+
+        // Полный выход
+        window.logout = () => {
+            signOut(auth).then(() => {
+                currentUser = null;
+                myWords = [];
+                location.reload();
+            });
+        };
 
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 currentUser = user;
                 document.getElementById('authSection').style.display = 'none';
-                document.getElementById('mainApp').style.display = 'block';
+                document.getElementById('mainApp').style.display = 'flex';
                 await loadData();
             } else {
-                document.getElementById('authSection').style.display = 'block';
+                document.getElementById('authSection').style.display = 'flex';
                 document.getElementById('mainApp').style.display = 'none';
             }
         });
 
         async function loadData() {
             const docSnap = await getDoc(doc(db, "users", currentUser.uid));
-            myWords = docSnap.exists() ? (docSnap.data().words || []) : [];
+            if (docSnap.exists()) {
+                myWords = docSnap.data().words || [];
+            }
             changeTab('cardTab');
         }
 
@@ -63,7 +78,6 @@
             if(id === 'cardTab') nextCard();
         };
 
-        // КАРТОЧКИ
         window.nextCard = () => {
             if(!myWords.length) return document.getElementById('cardDisplay').innerText = "Добавь слова!";
             const word = myWords[Math.floor(Math.random()*myWords.length)];
@@ -72,16 +86,13 @@
             display.onclick = () => { display.innerText = word.en; speak(word.en); };
         };
 
-        // ТЕСТ (ЭКЗАМЕН)
         window.startTest = () => {
             const limit = parseInt(document.getElementById('testLimit').value) || 5;
             const shuffled = [...myWords].sort(() => 0.5 - Math.random()).slice(0, limit);
-            
             activeTest = shuffled.map(word => {
                 const types = ['choice', 'tf', 'write', 'letters'];
                 const type = types[Math.floor(Math.random() * types.length)];
                 let data = { word, type, userAns: '' };
-
                 if(type === 'choice') {
                     let opts = [word.en];
                     while(opts.length < Math.min(4, myWords.length)) {
@@ -106,32 +117,23 @@
             const container = document.getElementById('questionsContainer');
             container.innerHTML = activeTest.map((item, idx) => {
                 const isCorrect = checkItem(item);
-                let statusClass = showResults ? (isCorrect ? 'card-correct' : 'card-wrong') : '';
-                
-                let html = `<div class="test-card ${statusClass}">`;
-                
+                let html = `<div class="test-card ${showResults ? (isCorrect ? 'card-correct' : 'card-wrong') : ''}">`;
                 if(item.type === 'choice') {
-                    html += `<p class="q-title">Выбери перевод: <b>${item.word.ru}</b></p>
+                    html += `<p class="q-title">Перевод "<b>${item.word.ru}</b>":</p>
                              <div class="opt-grid">${item.options.map(o => `<button class="opt-btn ${item.userAns === o ? 'selected' : ''}" onclick="selectAns(${idx},'${o}')" ${showResults?'disabled':''}>${o}</button>`).join('')}</div>`;
                 } else if(item.type === 'tf') {
-                    html += `<p class="q-title">Правда ли, что <b>${item.word.ru}</b> это <b>${item.fakeEn}</b>?</p>
-                             <div class="opt-grid">
+                    html += `<p class="q-title"><b>${item.word.ru}</b> = <b>${item.fakeEn}</b>?</p>
+                             <div class="opt-grid" style="grid-template-columns: 1fr 1fr;">
                                 <button class="opt-btn ${item.userAns === 'true' ? 'selected' : ''}" onclick="selectAns(${idx},'true')" ${showResults?'disabled':''}>Правда</button>
                                 <button class="opt-btn ${item.userAns === 'false' ? 'selected' : ''}" onclick="selectAns(${idx},'false')" ${showResults?'disabled':''}>Ложь</button>
                              </div>`;
                 } else if(item.type === 'write') {
-                    html += `<p class="q-title">Напиши перевод <b>${item.word.ru}</b>:</p>
-                             <input type="text" class="test-input" oninput="selectAns(${idx}, this.value)" value="${item.userAns}" ${showResults?'disabled':''}>`;
+                    html += `<p class="q-title">Напиши <b>${item.word.ru}</b>:</p><input type="text" class="test-input" oninput="selectAns(${idx}, this.value)" value="${item.userAns}" ${showResults?'disabled':''}>`;
                 } else if(item.type === 'letters') {
-                    html += `<p class="q-title">Собери слово <b>${item.word.ru}</b>:</p>
-                             <p class="letters-hint">${item.scrambled}</p>
+                    html += `<p class="q-title">Собери <b>${item.word.ru}</b>:</p><p class="letters-hint">${item.scrambled}</p>
                              <input type="text" class="test-input" oninput="selectAns(${idx}, this.value)" value="${item.userAns}" ${showResults?'disabled':''}>`;
                 }
-
-                if(showResults && !isCorrect) {
-                    html += `<p class="correct-text">Верно: ${item.word.en}</p>`;
-                    speak(item.word.en);
-                }
+                if(showResults && !isCorrect) { html += `<p class="correct-text">Верно: ${item.word.en}</p>`; speak(item.word.en); }
                 return html + `</div>`;
             }).join('');
         }
@@ -143,7 +145,7 @@
 
         window.selectAns = (idx, val) => {
             activeTest[idx].userAns = val;
-            if (['choice', 'tf'].includes(activeTest[idx].type)) renderTest();
+            if (activeTest[idx].type === 'choice' || activeTest[idx].type === 'tf') renderTest();
         };
 
         window.finishTest = () => { renderTest(true); document.getElementById('finishBtn').style.display='none'; document.getElementById('resetTestBtn').style.display='block'; };
@@ -156,52 +158,50 @@
                 if(p.length === 2) myWords.push({en: p[0].trim(), ru: p[1].trim()});
             });
             await setDoc(doc(db, "users", currentUser.uid), {words: myWords});
-            alert("Слова добавлены!");
+            alert("Сохранено!");
             document.getElementById('bulkText').value = "";
         };
     </script>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #121225; color: white; margin: 0; display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 20px; }
-        .menu { display: flex; gap: 10px; margin-bottom: 30px; }
-        .menu button { padding: 12px 20px; border: none; background: #3498db; color: white; border-radius: 12px; cursor: pointer; font-weight: bold; }
+        body { font-family: 'Segoe UI', sans-serif; background: #121225; color: white; margin: 0; display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding-bottom: 100px; }
         
-        .container { width: 100%; max-width: 600px; }
+        /* Меню в 2 ряда */
+        .menu { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 20px 0; width: 90%; max-width: 600px; }
+        .menu button { padding: 15px; border: none; background: #3498db; color: white; border-radius: 12px; cursor: pointer; font-weight: bold; font-size: 16px; }
         
-        /* КАРТОЧКИ ЗАДАНИЙ */
-        .test-card { background: white; color: #333; padding: 25px; border-radius: 25px; margin-bottom: 20px; box-shadow: 0 8px 20px rgba(0,0,0,0.3); }
-        .card-correct { border-left: 10px solid #2ecc71; background: #f0fff4; }
-        .card-wrong { border-left: 10px solid #e74c3c; background: #fff5f5; }
-        
-        .q-title { font-size: 18px; font-weight: bold; margin-bottom: 15px; }
-        .opt-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
-        .opt-btn { padding: 15px; border: 2px solid #eee; border-radius: 12px; background: #f9f9f9; cursor: pointer; font-weight: bold; }
-        .opt-btn.selected { background: #3498db; color: white; }
-        
-        .card-box { background: white; color: #333; font-size: 35px; font-weight: bold; padding: 60px 20px; border-radius: 25px; text-align: center; cursor: pointer; margin-bottom: 20px; }
-        
-        .btn-main { background: #27ae60; color: white; border: none; padding: 18px; border-radius: 15px; width: 100%; cursor: pointer; font-size: 18px; font-weight: bold; margin-top: 10px; }
+        .section { width: 90%; max-width: 600px; }
+        .test-card { background: white; color: #333; padding: 20px; border-radius: 20px; margin-bottom: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        .card-correct { border-left: 8px solid #2ecc71; }
+        .card-wrong { border-left: 8px solid #e74c3c; }
+        .q-title { font-size: 18px; font-weight: bold; margin-bottom: 10px; }
+        .opt-grid { display: grid; grid-template-columns: 1fr; gap: 8px; }
+        .opt-btn { padding: 12px; border: 2px solid #eee; border-radius: 10px; background: #f9f9f9; cursor: pointer; font-weight: bold; font-size: 16px; }
+        .opt-btn.selected { background: #3498db; color: white; border-color: #2980b9; }
+        .test-input { width: 100%; padding: 12px; border-radius: 10px; border: 2px solid #ddd; font-size: 18px; box-sizing: border-box; }
+        .letters-hint { color: #3498db; font-weight: bold; font-size: 20px; letter-spacing: 2px; }
+        .card-box { background: white; color: #333; font-size: 32px; font-weight: bold; padding: 60px 20px; border-radius: 25px; text-align: center; cursor: pointer; margin-bottom: 15px; }
+        .btn-main { background: #27ae60; color: white; border: none; padding: 16px; border-radius: 15px; width: 100%; cursor: pointer; font-size: 18px; font-weight: bold; }
         .exit-btn { position: fixed; bottom: 20px; right: 20px; background: #c0392b; color: white; border: none; padding: 12px 20px; border-radius: 12px; cursor: pointer; font-weight: bold; }
-        
-        input, textarea { width: 100%; padding: 15px; border-radius: 15px; border: 2px solid #ddd; font-size: 16px; margin: 10px 0; box-sizing: border-box; }
-        .letters-hint { color: #3498db; font-size: 22px; font-weight: bold; letter-spacing: 3px; margin: 10px 0; }
+        textarea { width: 100%; padding: 15px; border-radius: 15px; font-size: 16px; margin: 10px 0; border: 2px solid #ddd; box-sizing: border-box; }
         .correct-text { color: #e74c3c; font-weight: bold; margin-top: 10px; }
     </style>
 </head>
 <body>
 
-    <div id="authSection" style="margin-top: 150px; text-align: center;">
-        <h1 style="font-size: 3rem;">🚀 English App</h1>
+    <div id="authSection" style="margin-top: 150px; text-align:center;">
+        <h1>🚀 English App</h1>
         <button class="btn-main" style="width:auto; padding: 20px 40px;" onclick="login()">ВОЙТИ ЧЕРЕЗ GOOGLE</button>
     </div>
 
-    <div id="mainApp" style="display:none; width: 100%; max-width: 600px;">
+    <div id="mainApp" style="display:none; flex-direction: column; align-items: center; width: 100%;">
         <div class="menu">
             <button onclick="changeTab('cardTab')">Карточки</button>
             <button onclick="changeTab('testTab')">Экзамен</button>
             <button onclick="changeTab('addTab')">Добавить</button>
+            <button onclick="changeTab('testTab')">Настройки</button>
         </div>
 
-        <div class="container">
+        <div class="section">
             <div id="cardTab" class="section">
                 <div class="card-box" id="cardDisplay">Нажми...</div>
                 <button class="btn-main" style="background:#7f8c8d" onclick="nextCard()">СЛЕДУЮЩЕЕ →</button>
@@ -209,9 +209,9 @@
 
             <div id="testTab" class="section" style="display:none">
                 <div id="testSetup" class="test-card">
-                    <h2 style="margin:0 0 15px 0">Начать тест</h2>
-                    <p>Сколько вопросов?</p>
-                    <input type="number" id="testLimit" value="5">
+                    <h2 style="margin-top:0">Начать тест</h2>
+                    <p>Кол-во вопросов:</p>
+                    <input type="number" id="testLimit" value="5" class="test-input">
                     <button class="btn-main" onclick="startTest()">ПОЕХАЛИ!</button>
                 </div>
                 <div id="testList" style="display:none">
@@ -223,7 +223,7 @@
 
             <div id="addTab" class="section" style="display:none">
                 <div class="test-card">
-                    <h3 style="margin:0 0 10px 0">Массовое добавление</h3>
+                    <h3>Добавить слова</h3>
                     <textarea id="bulkText" rows="6" placeholder="apple;яблоко"></textarea>
                     <button class="btn-main" onclick="addWords()">СОХРАНИТЬ</button>
                 </div>
