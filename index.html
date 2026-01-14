@@ -9,15 +9,14 @@
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        // ТВОЙ ТОЧНЫЙ КОНФИГ
+        // Ключи строго из твоего проекта bebe-615c2
         const firebaseConfig = {
             apiKey: "AIzaSyB08h5m5cqOcRXNNzHhnIFLTLAjd0kk754",
             authDomain: "bebe-615c2.firebaseapp.com",
             projectId: "bebe-615c2",
             storageBucket: "bebe-615c2.firebasestorage.app",
             messagingSenderId: "913901689922",
-            appId: "1:913901689922:web:e72c374ac142486e8061db",
-            measurementId: "G-T34KXLZ9L7"
+            appId: "1:913901689922:web:e72c374ac142486e8061db"
         };
 
         const app = initializeApp(firebaseConfig);
@@ -66,11 +65,11 @@
             await setDoc(doc(db, "users", currentUser.uid), { words: myWords });
         }
 
-        // МИНИ-ИГРА: Собери слово
+        // Мини-игра
         let buildWord = null;
         let currentString = "";
         window.initBuildGame = () => {
-            if(!myWords.length) return alert("Сначала добавь слова во вкладке +");
+            if(!myWords.length) return alert("Добавьте слова во вкладке +");
             buildWord = myWords[Math.floor(Math.random()*myWords.length)];
             currentString = "";
             document.getElementById('buildQuest').innerText = buildWord.ru;
@@ -84,17 +83,14 @@
             document.getElementById('buildInput').innerText = currentString;
             btn.style.visibility = "hidden";
             if(currentString.length === buildWord.en.length) {
-                if(currentString.toLowerCase() === buildWord.en.toLowerCase()) {
-                    alert("Правильно! 🎉");
-                } else {
-                    alert("Ошибка! Правильно было: " + buildWord.en);
-                }
+                if(currentString.toLowerCase() === buildWord.en.toLowerCase()) alert("Верно! 🔥");
+                else alert("Ошибка! Правильно: " + buildWord.en);
                 initBuildGame();
             }
         };
 
         window.initCard = () => {
-            if(!myWords.length) { document.getElementById('cardText').innerText = "Слов пока нет"; return; }
+            if(!myWords.length) { document.getElementById('cardText').innerText = "Слов нет"; return; }
             const card = myWords[Math.floor(Math.random()*myWords.length)];
             document.getElementById('cardText').innerText = card.ru;
             document.getElementById('cardText').onclick = () => {
@@ -110,7 +106,7 @@
                 await saveData();
                 document.getElementById('enIn').value = "";
                 document.getElementById('ruIn').value = "";
-                alert("Слово сохранено в облако!");
+                alert("Сохранено!");
             }
         };
 
@@ -122,49 +118,32 @@
         };
     </script>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #0f3460; color: white; text-align: center; padding: 20px; }
-        .box { background: #16213e; padding: 25px; border-radius: 20px; max-width: 400px; margin: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        body { font-family: sans-serif; background: #0f3460; color: white; text-align: center; padding: 20px; }
+        .box { background: #16213e; padding: 25px; border-radius: 20px; max-width: 400px; margin: auto; }
         input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: none; box-sizing: border-box; }
         button { background: #e94560; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; margin: 5px; font-weight: bold; width: 100%; }
-        .nav-btn { width: auto; background: #533483; font-size: 12px; flex: 1; }
+        .nav-btn { width: auto; background: #533483; font-size: 12px; }
         .card { background: #1a1a2e; height: 150px; display: flex; align-items: center; justify-content: center; font-size: 24px; margin: 20px 0; border-radius: 15px; cursor: pointer; border: 2px dashed #e94560; }
-        .l-btn { width: 40px; height: 40px; margin: 4px; background: #e94560; color: white; border: none; border-radius: 5px; font-size: 18px; cursor: pointer; }
+        .l-btn { width: 40px; height: 40px; margin: 5px; background: #e94560; color: white; border: none; border-radius: 5px; }
     </style>
 </head>
 <body>
     <div id="authSection" class="box">
-        <h2>Мой Английский</h2>
-        <input type="email" id="authEmail" placeholder="Твоя почта">
-        <input type="password" id="authPass" placeholder="Придумай пароль">
+        <h2>Вход</h2>
+        <input type="email" id="authEmail" placeholder="Email">
+        <input type="password" id="authPass" placeholder="Пароль">
         <button onclick="handleAuth('login')">Войти</button>
-        <button onclick="handleAuth('reg')" style="background: #533483">Зарегистрироваться</button>
+        <button onclick="handleAuth('reg')" style="background: #533483">Регистрация</button>
     </div>
-
     <div id="mainApp" style="display:none">
         <div class="box">
-            <div style="display: flex; gap: 5px; margin-bottom: 20px;">
-                <button class="nav-btn" onclick="showTab('learn')">Учить</button>
-                <button class="nav-btn" onclick="showTab('game')">Игра</button>
-                <button class="nav-btn" onclick="showTab('add')">➕</button>
-                <button class="nav-btn" onclick="logOut()" style="background: #222;">Выход</button>
-            </div>
-
-            <div id="learn" class="tab">
-                <div class="card" id="cardText">Загрузка...</div>
-                <button onclick="initCard()">Дальше →</button>
-            </div>
-
-            <div id="game" class="tab" style="display:none">
-                <h3 id="buildQuest">...</h3>
-                <div id="buildInput" style="font-size: 24px; color: #e94560; margin: 15px; min-height: 30px;"></div>
-                <div id="letters"></div>
-            </div>
-
-            <div id="add" class="tab" style="display:none">
-                <input id="enIn" placeholder="Слово на английском">
-                <input id="ruIn" placeholder="Перевод на русском">
-                <button onclick="addWord()">Сохранить</button>
-            </div>
+            <button class="nav-btn" onclick="showTab('learn')">Учить</button>
+            <button class="nav-btn" onclick="showTab('game')">Игра</button>
+            <button class="nav-btn" onclick="showTab('add')">➕</button>
+            <button class="nav-btn" onclick="logOut()" style="background: #222;">Выход</button>
+            <div id="learn" class="tab"><div class="card" id="cardText">...</div><button onclick="initCard()">Дальше</button></div>
+            <div id="game" class="tab" style="display:none"><h3 id="buildQuest"></h3><div id="buildInput"></div><div id="letters"></div></div>
+            <div id="add" class="tab" style="display:none"><input id="enIn" placeholder="English"><input id="ruIn" placeholder="Русский"><button onclick="addWord()">Сохранить</button></div>
         </div>
     </div>
 </body>
