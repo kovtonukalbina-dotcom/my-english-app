@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>English Pro Max</title>
+    <title>English Pro App</title>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
@@ -22,15 +22,9 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        let state = {
-            words: [
-                {en: "Apple", ru: "Яблоко", cat: "Base"}, {en: "House", ru: "Дом", cat: "Base"},
-                {en: "Cat", ru: "Кот", cat: "Base"}, {en: "Dog", ru: "Собака", cat: "Base"},
-                {en: "Sun", ru: "Солнце", cat: "Base"}, {en: "Water", ru: "Вода", cat: "Base"}
-            ],
-            streak: 0,
-            lastDate: ""
-        };
+        let state = { words: [], streak: 0, lastDate: "" };
+        let testData = [];
+        let testIdx = 0;
 
         window.login = () => {
             const p = new GoogleAuthProvider();
@@ -42,30 +36,47 @@
 
         onAuthStateChanged(auth, async (user) => {
             if (user) {
-                document.getElementById('authSection').style.display = 'none';
-                document.getElementById('mainApp').style.display = 'block';
+                document.getElementById('auth').style.display = 'none';
+                document.getElementById('app').style.display = 'block';
                 const snap = await getDoc(doc(db, "users", user.uid));
-                if (snap.exists()) state = { ...state, ...snap.data() };
-                renderFolders();
+                if (snap.exists()) {
+                    state = snap.data();
+                } else {
+                    state = { 
+                        words: [
+                            {en:"Apple", ru: "Яблоко", cat: "Base"}, {en: "House", ru: "Дом", cat: "Base"},
+                            {en: "Cat", ru: "Кот", cat: "Base"}, {en: "Dog", ru: "Собака", cat: "Base"},
+                            {en: "Sun", ru: "Солнце", cat: "Base"}, {en: "Water", ru: "Вода", cat: "Base"}
+                        ], 
+                        streak: 0, lastDate: "" 
+                    };
+                    await setDoc(doc(db, "users", user.uid), state);
+                }
+                updateStreak();
+                renderCats();
                 showTab('cardsTab');
             } else {
-                document.getElementById('authSection').style.display = 'flex';
-                document.getElementById('mainApp').style.display = 'none';
+                document.getElementById('auth').style.display = 'flex';
+                document.getElementById('app').style.display = 'none';
             }
         });
 
+        function updateStreak() {
+            document.getElementById('stk').innerText = "🔥 Серия: " + (state.streak || 0);
+        }
+
         window.showTab = (id) => {
-            document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
+            document.querySelectorAll('.tab').forEach(t => t.style.display = 'none');
             document.getElementById(id).style.display = 'block';
-            if (id === 'cardsTab') drawCard();
-            if (id === 'testsTab') resetTestUI();
+            if(id === 'cardsTab') drawCard();
+            if(id === 'testsTab') resetTest();
         };
 
-        function renderFolders() {
+        function renderCats() {
             const cats = [...new Set(state.words.map(w => w.cat))];
-            const html = cats.map(c => `<option value="${c}">${c}</option>`).join('');
-            document.getElementById('cardCat').innerHTML = html;
-            document.getElementById('testCat').innerHTML = html;
+            const h = cats.map(c => `<option value="${c}">${c}</option>`).join('');
+            document.getElementById('cCat').innerHTML = h;
+            document.getElementById('tCat').innerHTML = h;
         }
 
         window.speak = (t) => {
@@ -76,198 +87,167 @@
 
         // --- КАРТОЧКИ ---
         window.drawCard = () => {
-            const cat = document.getElementById('cardCat').value;
+            const cat = document.getElementById('cCat').value;
             const pool = state.words.filter(w => w.cat === cat);
-            const word = pool[Math.floor(Math.random() * pool.length)];
+            const w = pool[Math.floor(Math.random() * pool.length)];
             const box = document.getElementById('cardBox');
-            box.innerHTML = `<div class="card-inner" onclick="this.classList.toggle('flipped'); speak('${word.en}')">
-                <div class="card-front">${word.ru}</div>
-                <div class="card-back">${word.en}</div>
+            if(!w) return box.innerHTML = "<div class='white-win'>Нет слов в этой папке</div>";
+            box.innerHTML = `<div class="card-inner" onclick="this.classList.toggle('flipped'); speak('${w.en}')">
+                <div class="card-front">${w.ru}</div>
+                <div class="card-back">${w.en}</div>
             </div>`;
         };
 
         // --- ТЕСТЫ ---
-        let currentTest = [];
-        let curIdx = 0;
-
-        function resetTestUI() {
-            document.getElementById('testConfig').style.display = 'block';
-            document.getElementById('testActive').style.display = 'none';
-            document.getElementById('testResult').style.display = 'none';
-        }
+        window.resetTest = () => {
+            document.getElementById('tSetup').style.display = 'block';
+            document.getElementById('tPlay').style.display = 'none';
+            document.getElementById('tRes').style.display = 'none';
+        };
 
         window.startTest = () => {
-            const cat = document.getElementById('testCat').value;
-            const count = parseInt(document.getElementById('testCount').value) || 5;
+            const cat = document.getElementById('tCat').value;
+            const count = parseInt(document.getElementById('tCount').value) || 5;
             const types = Array.from(document.querySelectorAll('.t-type:checked')).map(i => i.value);
-            if (!types.length) return alert("Выбери типы заданий!");
-            
+            if(!types.length) return alert("Выбери хотя бы один тип задания!");
+
             const pool = state.words.filter(w => w.cat === cat);
-            currentTest = [...pool].sort(() => 0.5 - Math.random()).slice(0, count).map(w => {
-                const type = types[Math.floor(Math.random() * types.length)];
-                let q = { word: w, type, userAns: "", isChecked: false };
-                if (type === 'choice') q.opts = [w.en, ...pool.filter(x => x.en !== w.en).sort(() => 0.5 - Math.random()).slice(0, 2).map(x => x.en)].sort(() => 0.5 - Math.random());
-                if (type === 'tf') { q.isTrue = Math.random() > 0.5; q.fake = q.isTrue ? w.en : pool[Math.floor(Math.random()*pool.length)].en; }
-                if (type === 'letters') q.scrambled = w.en.split('').sort(() => 0.5 - Math.random()).join(' ');
+            testData = [...pool].sort(() => 0.5 - Math.random()).slice(0, count).map(w => {
+                const type = types[Math.floor(Math.random()*types.length)];
+                let q = { w, type, ans: "" };
+                if(type==='choice') q.opts = [w.en, ...pool.filter(x=>x.en!==w.en).sort(()=>0.5-Math.random()).slice(0,2).map(x=>x.en)].sort(()=>0.5-Math.random());
+                if(type==='tf') { q.isT = Math.random() > 0.5; q.f = q.isT ? w.en : pool[Math.floor(Math.random()*pool.length)].en; }
+                if(type==='letters') q.shuf = w.en.split('').sort(()=>0.5-Math.random()).join(' ');
                 return q;
             });
-
-            curIdx = 0;
-            renderQuestion();
-            document.getElementById('testConfig').style.display = 'none';
-            document.getElementById('testActive').style.display = 'block';
+            testIdx = 0;
+            renderQ();
+            document.getElementById('tSetup').style.display = 'none';
+            document.getElementById('tPlay').style.display = 'block';
         };
 
-        function renderQuestion() {
-            const q = currentTest[curIdx];
-            const cont = document.getElementById('qArea');
-            let h = `<div class="white-window">`;
-            h += `<div class="step-counter">Вопрос ${curIdx + 1} из ${currentTest.length}</div>`;
-            
-            if (q.type === 'choice') h += `<p>${q.word.ru}:</p><div class="grid">${q.opts.map(o => `<button class="opt-btn ${q.userAns === o ? 'active' : ''}" onclick="setAns('${o}')">${o}</button>`).join('')}</div>`;
-            else if (q.type === 'tf') h += `<p>${q.word.ru} = ${q.fake}?</p><div class="grid" style="grid-template-columns:1fr 1fr"><button class="opt-btn ${q.userAns==='t'?'active':''}" onclick="setAns('t')">Да</button><button class="opt-btn ${q.userAns==='f'?'active':''}" onclick="setAns('f')">Нет</button></div>`;
-            else if (q.type === 'letters') h += `<p>${q.word.ru}: <span class="hint">${q.scrambled}</span></p><input type="text" class="inp" oninput="setAns(this.value)" value="${q.userAns}">`;
-            else h += `<p>Переведи "${q.word.ru}":</p><input type="text" class="inp" oninput="setAns(this.value)" value="${q.userAns}">`;
-            
-            cont.innerHTML = h + `</div>`;
-            document.getElementById('nextBtn').innerText = (curIdx === currentTest.length - 1) ? "Завершить" : "Дальше →";
+        function renderQ() {
+            const q = testData[testIdx];
+            const area = document.getElementById('qArea');
+            let h = `<div class="white-win"><small>Вопрос ${testIdx+1} из ${testData.length}</small>`;
+            if(q.type==='choice') h += `<p>${q.w.ru} - это:</p><div class="grid">${q.opts.map(o=>`<button class="opt ${q.ans===o?'sel':''}" onclick="setAns('${o}')">${o}</button>`).join('')}</div>`;
+            else if(q.type==='tf') h += `<p>${q.w.ru} = ${q.f}?</p><div class="grid" style="grid-template-columns:1fr 1fr"><button class="opt ${q.ans==='t'?'sel':''}" onclick="setAns('t')">Да</button><button class="opt ${q.ans==='f'?'sel':''}" onclick="setAns('f')">Нет</button></div>`;
+            else if(q.type==='letters') h += `<p>${q.w.ru}: <b style="color:#3498db; letter-spacing:2px;">${q.shuf}</b></p><input type="text" class="inp" placeholder="Собери слово" oninput="setAns(this.value)" value="${q.ans}">`;
+            else h += `<p>Напиши перевод "${q.w.ru}":</p><input type="text" class="inp" placeholder="Перевод" oninput="setAns(this.value)" value="${q.ans}">`;
+            area.innerHTML = h + `</div>`;
+            document.getElementById('nextBtn').innerText = (testIdx === testData.length - 1) ? "Завершить" : "Дальше →";
         }
 
-        window.setAns = (v) => { currentTest[curIdx].userAns = v; renderQuestion(); };
+        window.setAns = (v) => { testData[testIdx].ans = v; if(['choice','tf'].includes(testData[testIdx].type)) renderQ(); };
+        window.nextQ = () => { if(testIdx < testData.length-1) { testIdx++; renderQ(); } else finish(); };
 
-        window.nextStep = () => {
-            if (curIdx < currentTest.length - 1) {
-                curIdx++;
-                renderQuestion();
-            } else {
-                showResults();
-            }
-        };
-
-        async function showResults() {
-            document.getElementById('testActive').style.display = 'none';
-            const resArea = document.getElementById('testResult');
-            resArea.style.display = 'block';
+        async function finish() {
+            document.getElementById('tPlay').style.display = 'none';
+            const res = document.getElementById('tRes');
+            res.style.display = 'block';
+            let correct = 0;
+            res.innerHTML = testData.map(q => {
+                const isOk = check(q); if(isOk) correct++;
+                return `<div class="white-win ${isOk?'ok':'err'}"><p>${q.w.ru} - <b>${q.w.en}</b></p><small>${isOk?'✅ Правильно':'❌ Ошибка'}</small></div>`;
+            }).join('') + `<button class="btn" onclick="resetTest()">Начать заново</button>`;
             
-            let correctCount = 0;
-            resArea.innerHTML = currentTest.map(q => {
-                const corr = isCorrect(q);
-                if (corr) correctCount++;
-                return `<div class="white-window ${corr?'q-correct':'q-wrong'}">
-                    <p>${q.word.ru} - <b>${q.word.en}</b></p>
-                    <small>${corr ? '✅ Верно' : '❌ Ошибка (твой ответ: ' + (q.userAns||'пусто') + ')'}</small>
-                </div>`;
-            }).join('') + `<button class="btn-green" onclick="resetTestUI()">Пройти еще раз</button>`;
-            
-            // Стрик
             const today = new Date().toDateString();
-            if (state.lastDate !== today) {
-                state.streak++;
+            if(state.lastDate !== today) {
+                state.streak = (state.streak || 0) + 1;
                 state.lastDate = today;
-                await updateDoc(doc(db, "users", auth.currentUser.uid), { streak: state.streak, lastDate: state.lastDate });
+                await updateDoc(doc(db, "users", auth.currentUser.uid), state);
+                updateStreak();
             }
         }
 
-        function isCorrect(q) {
-            if (q.type === 'tf') return q.userAns === (q.fake === q.word.en ? 't' : 'f');
-            return q.userAns.toLowerCase().trim() === q.word.en.toLowerCase().trim();
+        function check(q) {
+            if(q.type==='tf') return q.ans === (q.f === q.w.en ? 't' : 'f');
+            return q.ans.toLowerCase().trim() === q.w.en.toLowerCase().trim();
         }
 
-        // --- ДОБАВЛЕНИЕ ---
-        window.saveNewWords = async () => {
-            const cat = document.getElementById('newCatName').value || "General";
-            const text = document.getElementById('newWordsText').value;
-            text.split('\n').forEach(line => {
-                const p = line.split(';');
-                if (p.length === 2) state.words.push({ en: p[0].trim(), ru: p[1].trim(), cat: cat });
+        window.addWords = async () => {
+            const cat = document.getElementById('nCat').value || "General";
+            const text = document.getElementById('nWords').value;
+            if(!text) return;
+            text.split('\n').forEach(l => {
+                const p = l.split(';'); if(p.length===2) state.words.push({en:p[0].trim(), ru:p[1].trim(), cat});
             });
-            await updateDoc(doc(db, "users", auth.currentUser.uid), { words: state.words });
-            alert("Готово!");
-            renderFolders();
+            await updateDoc(doc(db, "users", auth.currentUser.uid), {words: state.words});
+            alert("Слова успешно добавлены в папку " + cat);
+            document.getElementById('nWords').value = "";
+            renderCats();
         };
-
     </script>
     <style>
-        body { font-family: -apple-system, sans-serif; background: #121225; color: white; margin: 0; padding: 10px; }
-        #authSection { height: 90vh; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-        .nav-menu { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
-        .nav-menu button { padding: 15px; border: none; background: #3498db; color: white; border-radius: 15px; font-weight: bold; }
-        
-        .white-window { background: white; color: #333; padding: 25px; border-radius: 20px; margin-bottom: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); }
-        .step-counter { font-size: 12px; color: #999; margin-bottom: 10px; text-transform: uppercase; }
-        .q-correct { border-left: 8px solid #2ecc71; }
-        .q-wrong { border-left: 8px solid #e74c3c; }
-
-        .card-wrap { perspective: 1000px; height: 250px; margin: 20px 0; }
+        body { font-family: -apple-system, sans-serif; background: #121225; color: white; margin: 0; padding: 15px; -webkit-tap-highlight-color: transparent; }
+        #auth { height: 90vh; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        .stk { text-align: center; color: #f1c40f; font-weight: bold; font-size: 22px; margin-bottom: 15px; }
+        .menu { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 25px; }
+        .menu button { padding: 18px; border: none; background: #3498db; color: white; border-radius: 18px; font-weight: bold; font-size: 14px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        .white-win { background: white; color: #333; padding: 25px; border-radius: 25px; margin-bottom: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); position: relative; }
+        .ok { border-left: 10px solid #2ecc71; } .err { border-left: 10px solid #e74c3c; }
+        .card-wrap { perspective: 1000px; height: 240px; margin: 15px 0; }
         .card-inner { position: relative; width: 100%; height: 100%; transition: transform 0.6s; transform-style: preserve-3d; }
         .card-inner.flipped { transform: rotateY(180deg); }
-        .card-front, .card-back { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; display: flex; align-items: center; justify-content: center; border-radius: 20px; font-size: 28px; font-weight: bold; background: white; color: #333; text-align: center; }
-        .card-back { transform: rotateY(180deg); color: #3498db; }
-
+        .card-front, .card-back { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; display: flex; align-items: center; justify-content: center; border-radius: 25px; font-size: 30px; font-weight: bold; background: white; color: #333; text-align: center; padding: 20px; box-sizing: border-box; }
+        .card-back { transform: rotateY(180deg); color: #3498db; background: #f9f9f9; }
         .grid { display: grid; gap: 10px; margin-top: 15px; }
-        .opt-btn { padding: 15px; border: 1px solid #ddd; border-radius: 12px; background: #f8f9fa; font-weight: 600; cursor: pointer; }
-        .opt-btn.active { background: #3498db; color: white; }
-        .inp { width: 100%; padding: 15px; border-radius: 12px; border: 1px solid #ddd; font-size: 18px; box-sizing: border-box; }
-        .hint { color: #3498db; font-weight: bold; display: block; letter-spacing: 2px; }
-        
-        .btn-green { background: #2ecc71; color: white; border: none; padding: 18px; border-radius: 15px; width: 100%; font-weight: bold; font-size: 16px; margin-top: 10px; }
-        select { width: 100%; padding: 12px; margin-bottom: 10px; border-radius: 12px; }
-        textarea { width: 100%; height: 100px; border-radius: 15px; padding: 10px; box-sizing: border-box; margin-top: 10px; }
+        .opt { padding: 15px; border: 1px solid #ddd; border-radius: 15px; background: #fdfdfd; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .opt.sel { background: #3498db; color: white; border-color: #3498db; }
+        .inp { width: 100%; padding: 16px; border-radius: 15px; border: 2px solid #eee; box-sizing: border-box; font-size: 18px; outline: none; }
+        .btn { background: #2ecc71; color: white; border: none; padding: 18px; border-radius: 18px; width: 100%; font-weight: bold; font-size: 16px; cursor: pointer; margin-top: 10px; box-shadow: 0 5px 15px rgba(46, 204, 113, 0.3); }
+        select { width: 100%; padding: 14px; border-radius: 15px; border: none; background: #eee; font-weight: bold; margin-bottom: 15px; }
+        textarea { width: 100%; height: 100px; border-radius: 20px; padding: 15px; box-sizing: border-box; margin-top: 10px; border: none; font-size: 16px; }
+        small { color: #999; text-transform: uppercase; font-size: 10px; letter-spacing: 1px; }
     </style>
 </head>
 <body>
-
-    <div id="authSection">
-        <h1>🚀 English Pro</h1>
-        <button class="btn-green" style="width:auto; padding: 15px 40px;" onclick="login()">Войти через Google</button>
+    <div id="auth">
+        <h1 style="font-size: 40px; margin-bottom: 10px;">English</h1>
+        <button class="btn" style="width:auto; padding: 15px 40px;" onclick="login()">Войти через Google</button>
     </div>
-
-    <div id="mainApp" style="display:none;">
-        <div class="nav-menu">
-            <button onclick="showTab('cardsTab')">Карточки</button>
-            <button onclick="showTab('testsTab')">Тесты</button>
+    <div id="app" style="display:none;">
+        <div class="stk" id="stk">🔥 Серия: 0</div>
+        <div class="menu">
+            <button onclick="showTab('cardsTab')">Повторение</button>
+            <button onclick="showTab('testsTab')">Экзамен</button>
             <button onclick="showTab('addTab')">Добавить</button>
-            <button onclick="logout()">Выход</button>
+            <button onclick="logout()">Выйти</button>
         </div>
-
-        <div id="cardsTab" class="tab-content" style="margin-top:20px">
-            <select id="cardCat" onchange="drawCard()"></select>
+        <div id="cardsTab" class="tab">
+            <select id="cCat" onchange="drawCard()"></select>
             <div class="card-wrap" id="cardBox"></div>
-            <button class="btn-green" style="background:#2f3542" onclick="drawCard()">Дальше →</button>
+            <button class="btn" style="background:#2c3e50" onclick="drawCard()">Следующее →</button>
         </div>
-
-        <div id="testsTab" class="tab-content" style="display:none; margin-top:20px">
-            <div id="testConfig">
-                <div class="white-window">
-                    <p style="margin:0">Настройки теста:</p>
-                    <select id="testCat" style="margin-top:10px"></select>
-                    <input type="number" id="testCount" value="5" class="inp" placeholder="Сколько слов?">
+        <div id="testsTab" class="tab" style="display:none">
+            <div id="tSetup">
+                <div class="white-win">
+                    <p style="margin-top:0">Настройки теста:</p>
+                    <select id="tCat"></select>
+                    <input type="number" id="tCount" value="5" class="inp" placeholder="Количество слов">
                     <div style="margin-top:15px; font-size: 14px;">
-                        <label><input type="checkbox" class="t-type" value="choice" checked> Выбор варианта</label><br>
-                        <label><input type="checkbox" class="t-type" value="tf" checked> True/False</label><br>
-                        <label><input type="checkbox" class="t-type" value="letters" checked> Собрать из букв</label><br>
-                        <label><input type="checkbox" class="t-type" value="write" checked> Письмо</label>
+                        <label style="display:block; margin: 8px 0;"><input type="checkbox" class="t-type" value="choice" checked> Выбор варианта</label>
+                        <label style="display:block; margin: 8px 0;"><input type="checkbox" class="t-type" value="tf" checked> Правда / Ложь</label>
+                        <label style="display:block; margin: 8px 0;"><input type="checkbox" class="t-type" value="letters" checked> Собрать из букв</label>
+                        <label style="display:block; margin: 8px 0;"><input type="checkbox" class="t-type" value="write" checked> Письмо (перевод)</label>
                     </div>
                 </div>
-                <button class="btn-green" onclick="startTest()">Начать</button>
+                <button class="btn" onclick="startTest()">Начать экзамен</button>
             </div>
-            
-            <div id="testActive" style="display:none;">
+            <div id="tPlay" style="display:none">
                 <div id="qArea"></div>
-                <button class="btn-green" id="nextBtn" onclick="nextStep()">Дальше →</button>
+                <button class="btn" id="nextBtn" onclick="nextQ()">Дальше →</button>
             </div>
-
-            <div id="testResult" style="display:none;"></div>
+            <div id="tRes" style="display:none"></div>
         </div>
-
-        <div id="addTab" class="tab-content" style="display:none; margin-top:20px">
-            <div class="white-window">
-                <input type="text" id="newCatName" class="inp" placeholder="Название папки">
-                <textarea id="newWordsText" placeholder="apple;яблоко (через ;)"></textarea>
-                <button class="btn-green" onclick="saveNewWords()">Сохранить</button>
+        <div id="addTab" class="tab" style="display:none">
+            <div class="white-win">
+                <p style="margin-top:0">Новая тема:</p>
+                <input type="text" id="nCat" class="inp" placeholder="Напр: Животные">
+                <textarea id="nWords" placeholder="dog;собака&#10;cat;кот"></textarea>
+                <button class="btn" onclick="addWords()">Сохранить слова</button>
             </div>
         </div>
     </div>
-
 </body>
 </html>
