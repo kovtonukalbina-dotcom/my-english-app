@@ -26,9 +26,17 @@
         let currentUser = null;
         let myWords = [];
 
+        // Функция для красивых уведомлений
+        window.showToast = (text, type = 'success') => {
+            const toast = document.getElementById('toast');
+            toast.innerText = text;
+            toast.className = `toast show ${type}`;
+            setTimeout(() => { toast.className = 'toast'; }, 3000);
+        };
+
         window.loginWithGoogle = async () => {
             try { await signInWithPopup(auth, provider); } 
-            catch (e) { alert("Ошибка: " + e.message); }
+            catch (e) { showToast("Ошибка входа: " + e.message, 'error'); }
         };
 
         window.logOut = () => signOut(auth);
@@ -65,15 +73,16 @@
             document.getElementById('wordCount').innerText = myWords.length;
         };
 
-        // КАРТОЧКИ
         let currentWord = null;
         let isFlipped = false;
+
         window.initCard = () => {
-            if(!myWords.length) return document.getElementById('cardDisplay').innerText = "Добавь слова!";
+            if(!myWords.length) return;
             currentWord = myWords[Math.floor(Math.random()*myWords.length)];
             isFlipped = false;
             document.getElementById('cardDisplay').innerText = currentWord.ru;
         };
+
         window.flipCard = () => {
             isFlipped = !isFlipped;
             document.getElementById('cardDisplay').innerText = isFlipped ? currentWord.en : currentWord.ru;
@@ -84,50 +93,45 @@
             }
         };
 
-        // МАССОВОЕ ДОБАВЛЕНИЕ
         window.addBulkWords = async () => {
             const text = document.getElementById('bulkText').value.trim();
             if(!text) return;
-            
             const lines = text.split('\n');
-            let addedCount = 0;
-
+            let added = 0;
             lines.forEach(line => {
                 const parts = line.split(';');
                 if(parts.length === 2) {
                     myWords.push({ en: parts[0].trim(), ru: parts[1].trim() });
-                    addedCount++;
+                    added++;
                 }
             });
-
-            if(addedCount > 0) {
+            if(added > 0) {
                 await saveData();
                 document.getElementById('bulkText').value = "";
-                alert(`Успешно добавлено слов: ${addedCount}`);
+                showToast(`Добавлено слов: ${added}`);
                 document.getElementById('wordCount').innerText = myWords.length;
             } else {
-                alert("Ошибка формата! Используй: англ;рус");
+                showToast("Используй формат англ;рус", "error");
             }
         };
 
-        // НАПИСАНИЕ
         window.initWrite = () => {
             if(!myWords.length) return;
             currentWord = myWords[Math.floor(Math.random()*myWords.length)];
             document.getElementById('writeQuest').innerText = currentWord.ru;
             document.getElementById('writeInput').value = "";
         };
+
         window.checkWrite = () => {
             const userAns = document.getElementById('writeInput').value.toLowerCase().trim();
             if(userAns === currentWord.en.toLowerCase()) {
-                alert("Правильно! ✨"); 
+                showToast("Правильно! ✨"); 
                 initWrite();
             } else {
-                alert(`Ошибка! ❌\nПравильный ответ: ${currentWord.en}`);
+                showToast(`Ошибка! Верно: ${currentWord.en}`, "error");
             }
         };
 
-        // ТЕСТ
         window.startTest = () => {
             if(!myWords.length) return;
             let q = myWords[Math.floor(Math.random()*myWords.length)];
@@ -142,35 +146,44 @@
                 `<button class="btn-opt" onclick="checkTestAnswer('${o}','${q.en}')">${o}</button>`
             ).join('');
         };
+
         window.checkTestAnswer = (val, ans) => {
             if(val === ans) { 
-                alert("Верно! 🔥"); 
+                showToast("Верно! 🔥"); 
                 startTest(); 
             } else {
-                alert(`Неверно! ❌\nПравильный ответ был: ${ans}`);
+                showToast(`Неверно! Ответ: ${ans}`, "error");
                 startTest();
             }
         };
-
     </script>
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; margin: 0; display: flex; justify-content: center; min-height: 100vh; color: white; }
         #authSection, #mainApp { display: flex; flex-direction: column; align-items: center; width: 100%; padding: 20px; box-sizing: border-box; }
-        .app-header { font-size: 2.2rem; font-weight: bold; margin: 20px 0; color: #fff; text-shadow: 0 0 10px rgba(0,123,255,0.5); }
+        .app-header { font-size: 2.2rem; font-weight: bold; margin: 20px 0; text-align: center; }
         .menu { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 25px; }
-        .menu button { padding: 10px 15px; border: none; border-radius: 10px; background: #007bff; color: white; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        .menu button:hover { background: #0056b3; }
-        .container { background: white; color: #333; padding: 30px; border-radius: 25px; width: 100%; max-width: 550px; text-align: center; box-shadow: 0 15px 40px rgba(0,0,0,0.6); }
-        .card-box { padding: 60px 20px; border: 3px dashed #007bff; border-radius: 20px; font-size: 30px; font-weight: bold; cursor: pointer; margin-bottom: 20px; background: #f8f9fa; }
-        textarea, input { width: 100%; padding: 15px; margin: 10px 0; border: 2px solid #ddd; border-radius: 12px; box-sizing: border-box; font-size: 16px; font-family: inherit; }
+        .menu button { padding: 10px 15px; border: none; border-radius: 10px; background: #007bff; color: white; font-weight: bold; cursor: pointer; }
+        .container { background: white; color: #333; padding: 30px; border-radius: 25px; width: 100%; max-width: 500px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.5); position: relative; }
+        .card-box { padding: 50px 20px; border: 3px dashed #007bff; border-radius: 20px; font-size: 28px; font-weight: bold; cursor: pointer; margin-bottom: 20px; background: #f9f9f9; }
+        textarea, input { width: 100%; padding: 15px; margin: 10px 0; border: 2px solid #ddd; border-radius: 12px; box-sizing: border-box; font-size: 16px; }
         .btn-main { background: #28a745; color: white; border: none; padding: 15px; border-radius: 12px; width: 100%; cursor: pointer; font-size: 18px; font-weight: bold; }
-        .btn-opt { background: #f1f1f1; border: 2px solid #ddd; padding: 12px; margin: 5px 0; width: 100%; border-radius: 10px; cursor: pointer; font-weight: bold; font-size: 16px; }
-        .btn-opt:hover { background: #e2e2e2; border-color: #007bff; }
-        .google-btn { background: white; color: #333; padding: 15px 30px; border-radius: 15px; border: none; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 10px; margin-top: 100px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
-        .info-text { font-size: 13px; color: #666; margin-top: 5px; }
+        .btn-opt { background: #f1f1f1; border: 2px solid #ddd; padding: 12px; margin: 5px 0; width: 100%; border-radius: 10px; cursor: pointer; font-weight: bold; }
+        
+        /* Стили уведомлений */
+        .toast { visibility: hidden; min-width: 250px; background-color: #333; color: #fff; text-align: center; border-radius: 15px; padding: 16px; position: fixed; z-index: 100; bottom: 30px; font-weight: bold; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        .toast.show { visibility: visible; animation: fadein 0.5s, fadeout 0.5s 2.5s; }
+        .toast.success { background-color: #28a745; }
+        .toast.error { background-color: #dc3545; }
+        
+        @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
+        @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+
+        .google-btn { background: white; color: #333; padding: 15px 30px; border-radius: 15px; border: none; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 10px; margin-top: 100px; }
     </style>
 </head>
 <body>
+
+    <div id="toast" class="toast">Сообщение</div>
 
     <div id="authSection">
         <h1 class="app-header">🚀 My English App</h1>
@@ -207,12 +220,10 @@
             </div>
 
             <div id="addTab" class="section" style="display:none">
-                <h3>Добавить много слов</h3>
-                <p class="info-text">Вводи формат: <b>английский;русский</b><br>(каждое слово с новой строки)</p>
-                <textarea id="bulkText" rows="6" placeholder="apple;яблоко&#10;dog;собака&#10;car;машина"></textarea>
+                <h3>Добавить слова (англ;рус)</h3>
+                <textarea id="bulkText" rows="6" placeholder="apple;яблоко&#10;dog;собака"></textarea>
                 <button class="btn-main" onclick="addBulkWords()">Добавить в облако</button>
-                <hr>
-                <p>Всего слов в словаре: <b id="wordCount">0</b></p>
+                <p style="margin-top:15px">Всего слов: <b id="wordCount">0</b></p>
             </div>
         </div>
     </div>
