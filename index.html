@@ -3,251 +3,157 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>English Pro App</title>
+    <title>English Pro Sync</title>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         const firebaseConfig = {
-            apiKey: "AIzaSyB7vbQ1BQya7SWIsGByt6pLtnkX-0WG1I8",
-            authDomain: "llla-f3cd0.firebaseapp.com",
-            projectId: "llla-f3cd0",
-            storageBucket: "llla-f3cd0.firebasestorage.app",
-            messagingSenderId: "976940645729",
-            appId: "1:976940645729:web:0a6a820a6a76156cf11920"
+            apiKey: "AIzaSyB08h5m5cqOcRXNNzHhnIFLTLAjd0kk754",
+            authDomain: "bebe-615c2.firebaseapp.com",
+            projectId: "bebe-615c2",
+            storageBucket: "bebe-615c2.firebasestorage.app",
+            messagingSenderId: "913901689922",
+            appId: "1:913901689922:web:e72c374ac142486e8061db"
         };
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
+        const provider = new GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: 'select_account' });
 
-        let state = { words: [], streak: 0, lastDate: "" };
-        let testData = [];
-        let testIdx = 0;
+        let myWords = [];
 
-        window.login = () => {
-            const p = new GoogleAuthProvider();
-            p.setCustomParameters({ prompt: 'select_account' });
-            signInWithPopup(auth, p);
+        // Вход через Google (выбор аккаунта)
+        window.login = async () => {
+            try {
+                await signInWithPopup(auth, provider);
+            } catch (e) {
+                alert("Ошибка входа: " + e.message);
+            }
         };
 
         window.logout = () => signOut(auth).then(() => location.reload());
 
         onAuthStateChanged(auth, async (user) => {
             if (user) {
-                document.getElementById('auth').style.display = 'none';
-                document.getElementById('app').style.display = 'block';
-                const snap = await getDoc(doc(db, "users", user.uid));
-                if (snap.exists()) {
-                    state = snap.data();
-                } else {
-                    state = { 
-                        words: [
-                            {en:"Apple", ru: "Яблоко", cat: "Base"}, {en: "House", ru: "Дом", cat: "Base"},
-                            {en: "Cat", ru: "Кот", cat: "Base"}, {en: "Dog", ru: "Собака", cat: "Base"},
-                            {en: "Sun", ru: "Солнце", cat: "Base"}, {en: "Water", ru: "Вода", cat: "Base"}
-                        ], 
-                        streak: 0, lastDate: "" 
-                    };
-                    await setDoc(doc(db, "users", user.uid), state);
-                }
-                updateStreak();
-                renderCats();
-                showTab('cardsTab');
+                document.getElementById('authBlock').style.display = 'none';
+                document.getElementById('appBlock').style.display = 'block';
+                await loadData(user.uid);
             } else {
-                document.getElementById('auth').style.display = 'flex';
-                document.getElementById('app').style.display = 'none';
+                document.getElementById('authBlock').style.display = 'flex';
+                document.getElementById('appBlock').style.display = 'none';
             }
         });
 
-        function updateStreak() {
-            document.getElementById('stk').innerText = "🔥 Серия: " + (state.streak || 0);
+        async function loadData(uid) {
+            const snap = await getDoc(doc(db, "users", uid));
+            if (snap.exists()) {
+                myWords = snap.data().words || [];
+            } else {
+                myWords = [];
+                await setDoc(doc(db, "users", uid), { words: [] });
+            }
+            initCard();
         }
+
+        window.addWord = async () => {
+            const en = document.getElementById('enIn').value;
+            const ru = document.getElementById('ruIn').value;
+            if (en && ru) {
+                myWords.push({ en, ru });
+                const user = auth.currentUser;
+                await updateDoc(doc(db, "users", user.uid), { words: myWords });
+                document.getElementById('enIn').value = '';
+                document.getElementById('ruIn').value = '';
+                alert("Сохранено в облако!");
+            }
+        };
+
+        window.initCard = () => {
+            const cardBox = document.getElementById('cardDisplay');
+            if (!myWords.length) {
+                cardBox.innerHTML = "<div style='font-size:16px; color:#999'>Добавь свои первые слова в разделе ➕</div>";
+                return;
+            }
+            const word = myWords[Math.floor(Math.random() * myWords.length)];
+            cardBox.innerText = word.ru;
+            cardBox.onclick = () => {
+                cardBox.innerText = (cardBox.innerText === word.ru ? word.en : word.ru);
+                cardBox.style.color = (cardBox.innerText === word.en ? "#3498db" : "#333");
+            };
+            cardBox.style.color = "#333";
+        };
 
         window.showTab = (id) => {
             document.querySelectorAll('.tab').forEach(t => t.style.display = 'none');
             document.getElementById(id).style.display = 'block';
-            if(id === 'cardsTab') drawCard();
-            if(id === 'testsTab') resetTest();
-        };
-
-        function renderCats() {
-            const cats = [...new Set(state.words.map(w => w.cat))];
-            const h = cats.map(c => `<option value="${c}">${c}</option>`).join('');
-            document.getElementById('cCat').innerHTML = h;
-            document.getElementById('tCat').innerHTML = h;
-        }
-
-        window.speak = (t) => {
-            const m = new SpeechSynthesisUtterance(t);
-            m.lang = 'en-US';
-            window.speechSynthesis.speak(m);
-        };
-
-        // --- КАРТОЧКИ ---
-        window.drawCard = () => {
-            const cat = document.getElementById('cCat').value;
-            const pool = state.words.filter(w => w.cat === cat);
-            const w = pool[Math.floor(Math.random() * pool.length)];
-            const box = document.getElementById('cardBox');
-            if(!w) return box.innerHTML = "<div class='white-win'>Нет слов в этой папке</div>";
-            box.innerHTML = `<div class="card-inner" onclick="this.classList.toggle('flipped'); speak('${w.en}')">
-                <div class="card-front">${w.ru}</div>
-                <div class="card-back">${w.en}</div>
-            </div>`;
-        };
-
-        // --- ТЕСТЫ ---
-        window.resetTest = () => {
-            document.getElementById('tSetup').style.display = 'block';
-            document.getElementById('tPlay').style.display = 'none';
-            document.getElementById('tRes').style.display = 'none';
-        };
-
-        window.startTest = () => {
-            const cat = document.getElementById('tCat').value;
-            const count = parseInt(document.getElementById('tCount').value) || 5;
-            const types = Array.from(document.querySelectorAll('.t-type:checked')).map(i => i.value);
-            if(!types.length) return alert("Выбери хотя бы один тип задания!");
-
-            const pool = state.words.filter(w => w.cat === cat);
-            testData = [...pool].sort(() => 0.5 - Math.random()).slice(0, count).map(w => {
-                const type = types[Math.floor(Math.random()*types.length)];
-                let q = { w, type, ans: "" };
-                if(type==='choice') q.opts = [w.en, ...pool.filter(x=>x.en!==w.en).sort(()=>0.5-Math.random()).slice(0,2).map(x=>x.en)].sort(()=>0.5-Math.random());
-                if(type==='tf') { q.isT = Math.random() > 0.5; q.f = q.isT ? w.en : pool[Math.floor(Math.random()*pool.length)].en; }
-                if(type==='letters') q.shuf = w.en.split('').sort(()=>0.5-Math.random()).join(' ');
-                return q;
-            });
-            testIdx = 0;
-            renderQ();
-            document.getElementById('tSetup').style.display = 'none';
-            document.getElementById('tPlay').style.display = 'block';
-        };
-
-        function renderQ() {
-            const q = testData[testIdx];
-            const area = document.getElementById('qArea');
-            let h = `<div class="white-win"><small>Вопрос ${testIdx+1} из ${testData.length}</small>`;
-            if(q.type==='choice') h += `<p>${q.w.ru} - это:</p><div class="grid">${q.opts.map(o=>`<button class="opt ${q.ans===o?'sel':''}" onclick="setAns('${o}')">${o}</button>`).join('')}</div>`;
-            else if(q.type==='tf') h += `<p>${q.w.ru} = ${q.f}?</p><div class="grid" style="grid-template-columns:1fr 1fr"><button class="opt ${q.ans==='t'?'sel':''}" onclick="setAns('t')">Да</button><button class="opt ${q.ans==='f'?'sel':''}" onclick="setAns('f')">Нет</button></div>`;
-            else if(q.type==='letters') h += `<p>${q.w.ru}: <b style="color:#3498db; letter-spacing:2px;">${q.shuf}</b></p><input type="text" class="inp" placeholder="Собери слово" oninput="setAns(this.value)" value="${q.ans}">`;
-            else h += `<p>Напиши перевод "${q.w.ru}":</p><input type="text" class="inp" placeholder="Перевод" oninput="setAns(this.value)" value="${q.ans}">`;
-            area.innerHTML = h + `</div>`;
-            document.getElementById('nextBtn').innerText = (testIdx === testData.length - 1) ? "Завершить" : "Дальше →";
-        }
-
-        window.setAns = (v) => { testData[testIdx].ans = v; if(['choice','tf'].includes(testData[testIdx].type)) renderQ(); };
-        window.nextQ = () => { if(testIdx < testData.length-1) { testIdx++; renderQ(); } else finish(); };
-
-        async function finish() {
-            document.getElementById('tPlay').style.display = 'none';
-            const res = document.getElementById('tRes');
-            res.style.display = 'block';
-            let correct = 0;
-            res.innerHTML = testData.map(q => {
-                const isOk = check(q); if(isOk) correct++;
-                return `<div class="white-win ${isOk?'ok':'err'}"><p>${q.w.ru} - <b>${q.w.en}</b></p><small>${isOk?'✅ Правильно':'❌ Ошибка'}</small></div>`;
-            }).join('') + `<button class="btn" onclick="resetTest()">Начать заново</button>`;
-            
-            const today = new Date().toDateString();
-            if(state.lastDate !== today) {
-                state.streak = (state.streak || 0) + 1;
-                state.lastDate = today;
-                await updateDoc(doc(db, "users", auth.currentUser.uid), state);
-                updateStreak();
-            }
-        }
-
-        function check(q) {
-            if(q.type==='tf') return q.ans === (q.f === q.w.en ? 't' : 'f');
-            return q.ans.toLowerCase().trim() === q.w.en.toLowerCase().trim();
-        }
-
-        window.addWords = async () => {
-            const cat = document.getElementById('nCat').value || "General";
-            const text = document.getElementById('nWords').value;
-            if(!text) return;
-            text.split('\n').forEach(l => {
-                const p = l.split(';'); if(p.length===2) state.words.push({en:p[0].trim(), ru:p[1].trim(), cat});
-            });
-            await updateDoc(doc(db, "users", auth.currentUser.uid), {words: state.words});
-            alert("Слова успешно добавлены в папку " + cat);
-            document.getElementById('nWords').value = "";
-            renderCats();
         };
     </script>
     <style>
-        body { font-family: -apple-system, sans-serif; background: #121225; color: white; margin: 0; padding: 15px; -webkit-tap-highlight-color: transparent; }
-        #auth { height: 90vh; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-        .stk { text-align: center; color: #f1c40f; font-weight: bold; font-size: 22px; margin-bottom: 15px; }
-        .menu { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 25px; }
-        .menu button { padding: 18px; border: none; background: #3498db; color: white; border-radius: 18px; font-weight: bold; font-size: 14px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
-        .white-win { background: white; color: #333; padding: 25px; border-radius: 25px; margin-bottom: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); position: relative; }
-        .ok { border-left: 10px solid #2ecc71; } .err { border-left: 10px solid #e74c3c; }
-        .card-wrap { perspective: 1000px; height: 240px; margin: 15px 0; }
-        .card-inner { position: relative; width: 100%; height: 100%; transition: transform 0.6s; transform-style: preserve-3d; }
-        .card-inner.flipped { transform: rotateY(180deg); }
-        .card-front, .card-back { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; display: flex; align-items: center; justify-content: center; border-radius: 25px; font-size: 30px; font-weight: bold; background: white; color: #333; text-align: center; padding: 20px; box-sizing: border-box; }
-        .card-back { transform: rotateY(180deg); color: #3498db; background: #f9f9f9; }
-        .grid { display: grid; gap: 10px; margin-top: 15px; }
-        .opt { padding: 15px; border: 1px solid #ddd; border-radius: 15px; background: #fdfdfd; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        .opt.sel { background: #3498db; color: white; border-color: #3498db; }
-        .inp { width: 100%; padding: 16px; border-radius: 15px; border: 2px solid #eee; box-sizing: border-box; font-size: 18px; outline: none; }
-        .btn { background: #2ecc71; color: white; border: none; padding: 18px; border-radius: 18px; width: 100%; font-weight: bold; font-size: 16px; cursor: pointer; margin-top: 10px; box-shadow: 0 5px 15px rgba(46, 204, 113, 0.3); }
-        select { width: 100%; padding: 14px; border-radius: 15px; border: none; background: #eee; font-weight: bold; margin-bottom: 15px; }
-        textarea { width: 100%; height: 100px; border-radius: 20px; padding: 15px; box-sizing: border-box; margin-top: 10px; border: none; font-size: 16px; }
-        small { color: #999; text-transform: uppercase; font-size: 10px; letter-spacing: 1px; }
+        body { background: #121225; color: #fff; font-family: -apple-system, sans-serif; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        
+        /* Блок входа */
+        #authBlock { height: 80vh; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        
+        .box { background: #fff; color: #333; padding: 25px; border-radius: 25px; width: 100%; max-width: 350px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); box-sizing: border-box; }
+        
+        h2 { color: #fff; margin-bottom: 30px; font-size: 32px; }
+        
+        input { width: 100%; padding: 15px; margin: 10px 0; border-radius: 15px; border: 1px solid #ddd; font-size: 16px; box-sizing: border-box; outline: none; }
+        
+        button { width: 100%; padding: 16px; margin: 10px 0; border-radius: 18px; border: none; font-weight: bold; font-size: 16px; cursor: pointer; transition: 0.2s; }
+        
+        .btn-main { background: #2ecc71; color: #fff; }
+        .btn-google { background: #fff; color: #333; border: 1px solid #ddd; display: flex; align-items: center; justify-content: center; gap: 10px; }
+        .btn-nav { background: #3498db; color: #fff; width: 48%; }
+        
+        /* Карточка */
+        .card { background: #f9f9f9; height: 180px; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: bold; border-radius: 20px; margin: 20px 0; cursor: pointer; text-align: center; padding: 20px; box-sizing: border-box; border: 2px solid #eee; transition: 0.3s; }
+        .card:active { transform: scale(0.95); }
+
+        .nav { display: flex; justify-content: space-between; width: 100%; max-width: 350px; margin-bottom: 20px; }
+        
+        .exit-btn { background: #e74c3c; color: #fff; margin-top: 40px; width: 100px; padding: 10px; font-size: 12px; }
     </style>
 </head>
 <body>
-    <div id="auth">
-        <h1 style="font-size: 40px; margin-bottom: 10px;">English</h1>
-        <button class="btn" style="width:auto; padding: 15px 40px;" onclick="login()">Войти через Google</button>
-    </div>
-    <div id="app" style="display:none;">
-        <div class="stk" id="stk">🔥 Серия: 0</div>
-        <div class="menu">
-            <button onclick="showTab('cardsTab')">Повторение</button>
-            <button onclick="showTab('testsTab')">Экзамен</button>
-            <button onclick="showTab('addTab')">Добавить</button>
-            <button onclick="logout()">Выйти</button>
-        </div>
-        <div id="cardsTab" class="tab">
-            <select id="cCat" onchange="drawCard()"></select>
-            <div class="card-wrap" id="cardBox"></div>
-            <button class="btn" style="background:#2c3e50" onclick="drawCard()">Следующее →</button>
-        </div>
-        <div id="testsTab" class="tab" style="display:none">
-            <div id="tSetup">
-                <div class="white-win">
-                    <p style="margin-top:0">Настройки теста:</p>
-                    <select id="tCat"></select>
-                    <input type="number" id="tCount" value="5" class="inp" placeholder="Количество слов">
-                    <div style="margin-top:15px; font-size: 14px;">
-                        <label style="display:block; margin: 8px 0;"><input type="checkbox" class="t-type" value="choice" checked> Выбор варианта</label>
-                        <label style="display:block; margin: 8px 0;"><input type="checkbox" class="t-type" value="tf" checked> Правда / Ложь</label>
-                        <label style="display:block; margin: 8px 0;"><input type="checkbox" class="t-type" value="letters" checked> Собрать из букв</label>
-                        <label style="display:block; margin: 8px 0;"><input type="checkbox" class="t-type" value="write" checked> Письмо (перевод)</label>
-                    </div>
-                </div>
-                <button class="btn" onclick="startTest()">Начать экзамен</button>
-            </div>
-            <div id="tPlay" style="display:none">
-                <div id="qArea"></div>
-                <button class="btn" id="nextBtn" onclick="nextQ()">Дальше →</button>
-            </div>
-            <div id="tRes" style="display:none"></div>
-        </div>
-        <div id="addTab" class="tab" style="display:none">
-            <div class="white-win">
-                <p style="margin-top:0">Новая тема:</p>
-                <input type="text" id="nCat" class="inp" placeholder="Напр: Животные">
-                <textarea id="nWords" placeholder="dog;собака&#10;cat;кот"></textarea>
-                <button class="btn" onclick="addWords()">Сохранить слова</button>
-            </div>
+
+    <div id="authBlock">
+        <h2>English Pro 🚀</h2>
+        <div class="box" style="background: transparent; box-shadow: none; padding: 0;">
+            <button class="btn-google" onclick="login()">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="20">
+                Выбрать аккаунт
+            </button>
         </div>
     </div>
+
+    <div id="appBlock" style="display:none; width: 100%; max-width: 350px;">
+        <div class="nav">
+            <button class="btn-nav" onclick="showTab('learn')">Учить</button>
+            <button class="btn-nav" onclick="showTab('add')">➕ Слово</button>
+        </div>
+
+        <div class="box">
+            <div id="learn" class="tab">
+                <div class="card" id="cardDisplay">Нажми</div>
+                <button class="btn-main" onclick="initCard()">Следующее →</button>
+            </div>
+
+            <div id="add" class="tab" style="display:none">
+                <input id="enIn" placeholder="English">
+                <input id="ruIn" placeholder="Русский">
+                <button class="btn-main" onclick="addWord()">В облако</button>
+            </div>
+        </div>
+
+        <div style="display: flex; justify-content: center;">
+            <button class="exit-btn" onclick="logout()">Выход</button>
+        </div>
+    </div>
+
 </body>
 </html>
